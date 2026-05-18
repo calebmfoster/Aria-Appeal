@@ -77,7 +77,7 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
             const response = await fetch(`${API_URL}/voice-profiles/`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${(session as any)?.accessToken}`
+                    'Authorization': `Bearer ${session?.accessToken}`
                 },
                 body: formData,
             });

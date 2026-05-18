@@ -56,7 +56,7 @@ const InspectorPanel: React.FC = () => {
             const segment = state.script.find(s => s.id === segmentId);
             if (!segment || !state.dirtySegments[segmentId]) return;
 
-            const token = (session as any)?.accessToken;
+            const token = session?.accessToken;
             if (!token || !projectId) return;
 
             setSaveStatus('saving');
@@ -142,7 +142,7 @@ const InspectorPanel: React.FC = () => {
         if (!activeSegment || !rewritePrompt.trim()) return;
         setIsRewriting(true);
         try {
-            const token = (session as any)?.accessToken;
+            const token = session?.accessToken;
             if (!token) throw new Error('Not authenticated');
 
             const res = await fetch(`${API_URL}/projects/rewrite-segment`, {
@@ -179,7 +179,7 @@ const InspectorPanel: React.FC = () => {
 
         setGeneratingSegment(segmentId, true);
         try {
-            const token = (session as any)?.accessToken;
+            const token = session?.accessToken;
             if (!token) throw new Error("Not authenticated");
 
             console.log('[Regenerate] Sending text:', latestSegment.text.substring(0, 60), '...');
@@ -249,7 +249,7 @@ const InspectorPanel: React.FC = () => {
     };
 
     const handleRegenerateAll = async () => {
-        const token = (session as any)?.accessToken;
+        const token = session?.accessToken;
         if (!token) return;
 
         toast.success("Regenerating all segments...");

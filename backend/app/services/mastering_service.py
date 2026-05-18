@@ -31,28 +31,32 @@ class MasteringService:
 
     def master_project(self, segment_paths: List[str], output_path: str) -> str:
         """
-        Concatenates script segments and applies the broadcast chain.
+        Stitches segment audio with 25ms crossfades, then applies a master LUFS pass at -16 LUFS.
         """
         try:
             if not segment_paths:
                 raise ValueError("No segment paths provided for mastering.")
 
-            # Load and concatenate
-            combined = AudioSegment.empty()
-            for path in segment_paths:
+            # Stitch with 25ms logarithmic crossfade at each boundary
+            combined = AudioSegment.from_file(segment_paths[0])
+            for path in segment_paths[1:]:
                 segment = AudioSegment.from_file(path)
-                combined += segment
-            
-            # Apply broadcast chain
-            mastered = self.apply_broadcast_chain(combined)
-            
-            # Export
-            # Ensure directory exists
+                combined = combined.append(segment, crossfade=25)
+
+            # Export stitched result
             dir_name = os.path.dirname(output_path)
             if dir_name:
                 os.makedirs(dir_name, exist_ok=True)
-            mastered.export(output_path, format="wav")
-            
+            combined.export(output_path, format="wav")
+
+            # Master LUFS pass: read back, normalize to -16 LUFS, write
+            import soundfile as sf
+            import numpy as np
+            from app.services.audio_normalize import post_process_master
+            samples, sr = sf.read(output_path, dtype="float32")
+            mastered = post_process_master(samples, sr)
+            sf.write(output_path, mastered, sr)
+
             return output_path
 
         except Exception as e:

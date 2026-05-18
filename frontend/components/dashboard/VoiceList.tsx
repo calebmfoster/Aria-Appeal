@@ -22,7 +22,7 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
         try {
             const response = await fetch(`${API_URL}/voice-profiles/`, {
                 headers: {
-                    'Authorization': `Bearer ${(session as any)?.accessToken}`
+                    'Authorization': `Bearer ${session?.accessToken}`
                 }
             });
             if (response.ok) {
@@ -41,7 +41,7 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
             const response = await fetch(`${API_URL}/voice-profiles/${id}`, {
                 method: 'DELETE',
                 headers: {
-                    'Authorization': `Bearer ${(session as any)?.accessToken}`
+                    'Authorization': `Bearer ${session?.accessToken}`
                 }
             });
             if (response.ok) {

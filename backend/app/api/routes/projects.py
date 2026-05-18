@@ -32,7 +32,7 @@ def _get_wav_duration_ms(audio_url: str) -> int:
         return 0
 
 
-def _extract_audio_tail(audio_url: str, tail_seconds: float = 2.0) -> Optional[str]:
+def _extract_audio_tail(audio_url: str, tail_seconds: float = 3.0) -> Optional[str]:
     """Extract the last N seconds of a generated WAV and write to a temp file.
     Returns the temp file path, or None on failure."""
     import soundfile as sf

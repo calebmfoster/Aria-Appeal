@@ -82,6 +82,21 @@ class TTSService:
             self.mode = "mock"
 
     @staticmethod
+    def _post_process_wav(file_path: str) -> None:
+        """Apply per-segment audio chain in-place: trim silence, pad silence, LUFS normalize."""
+        import soundfile as sf
+        from app.services.audio_normalize import post_process_segment
+        if not os.path.isfile(file_path):
+            return
+        try:
+            samples, sr = sf.read(file_path, dtype="float32")
+            processed = post_process_segment(samples, sr)
+            if len(processed) > 0:
+                sf.write(file_path, processed, sr)
+        except Exception as e:
+            logger.warning(f"Audio post-processing failed for {file_path}: {e}")
+
+    @staticmethod
     def _apply_pitch_shift(file_path: str, semitones: float) -> None:
         """Shift pitch in-place using resampling. Quality is good for ±6 semitones."""
         if abs(semitones) < 0.05:
@@ -150,6 +165,7 @@ class TTSService:
                 )
             if pitch_shift:
                 self._apply_pitch_shift(file_path, pitch_shift)
+            self._post_process_wav(file_path)
             return audio_url
         else:
             raise ValueError(f"Unknown TTS mode: {self.mode}")

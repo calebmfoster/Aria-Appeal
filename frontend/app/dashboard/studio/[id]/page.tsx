@@ -28,7 +28,7 @@ export default function StudioPage() {
 
         const pollData = async () => {
             if (projectId && status === 'authenticated') {
-                const token = (session as any)?.accessToken;
+                const token = session?.accessToken;
                 if (token && isSubscribed) {
                     await fetchProjectData(projectId, token);
                     setIsLoadingProject(false);
@@ -125,7 +125,7 @@ export default function StudioPage() {
         } else if (wasRegenerating && !anyRegenerating) {
             setWasRegenerating(false);
             // All segments done — re-fetch project data to get updated timestamps, then re-export
-            const token = (session as any)?.accessToken;
+            const token = session?.accessToken;
             if (token && projectId) {
                 fetchProjectData(projectId, token).then(() => {
                     handleGenerateFullAudio();
@@ -141,7 +141,7 @@ export default function StudioPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(session as any)?.accessToken}`
+                    'Authorization': `Bearer ${session?.accessToken}`
                 }
             });
             if (!res.ok) {

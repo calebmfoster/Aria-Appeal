@@ -1,15 +1,16 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-05-11
+**Last Updated**: 2026-05-18
 
 ## Critical / Blocking
 
 - None currently. DB connection and migration are resolved.
 
-## TTS — Audio Continuity (Tier 3 improvement)
+## TTS — Audio Continuity (Partially resolved 2026-05-18)
 
-- **Option 1 (deferred)**: Full-script single-pass synthesis. Concatenate all segment texts into one TTS call, generate a single audio file, then split back into per-segment WAVs using silence/VAD detection. Gives the best prosodic flow since the model sees the whole script in context. Tradeoff: re-editing a segment requires partial re-synthesis with seam management. Implemented option 2 instead (2026-05-11).
-- **Option 2 (done, 2026-05-11)**: Reference audio chaining for clone-path segments (tail of segment N feeds as reference into segment N+1). For preset-speaker segments, adds "continuing the emotional arc, ..." prefix to each emotion instruct string. Also fixed bug where all segments were using the project-level emotion instead of per-segment emotion.
+- ~~**Option 2 (done, 2026-05-11)**~~: Reference audio chaining for clone-path segments. Reference tail bumped from 2s to 3s (2026-05-18).
+- **Per-segment loudness normalization (done, 2026-05-18)**: `audio_normalize.py` implements silence trim → pad → LUFS normalize at –18 LUFS. Applied after pitch shift in `tts_engine.py`. Master export normalized to –16 LUFS with 25ms crossfade at segment boundaries.
+- **Prosodic discontinuity (open)**: Pitch/rate still resets per segment for preset-speaker path. Full-script single-pass synthesis (Option 2) was deferred — re-editing complexity too high. Clone path benefits from 3s reference chaining. Accepted as architectural constraint of per-segment TTS.
 
 ## TTS Engine — Planned Migration
 
@@ -39,7 +40,7 @@
 - ~~**No Initial Audio on Load**~~: RESOLVED (Session 3) — Studio polls for audio and shows progress banner. Timestamps hidden until audio exists.
 - ~~**No Voice Indicator in Studio**~~: RESOLVED (Session 4) — Voice name badges shown on ScriptEditor segment cards.
 - **Campaign Creation No Progress**: After clicking "Generate", progress bar shown but could be more detailed.
-- **Type Safety**: `(session as any)?.accessToken` casts in VoiceList, VoiceUpload, InspectorPanel, create-campaign-modal, and studio page. Should extend NextAuth session type properly.
+- ~~**Type Safety**~~: RESOLVED (Session 8) — `frontend/types/next-auth.d.ts` added; all 6 `(session as any)` casts removed. Session timeout now shows re-login modal via `SessionExpiredModal.tsx`.
 
 ## Backend
 

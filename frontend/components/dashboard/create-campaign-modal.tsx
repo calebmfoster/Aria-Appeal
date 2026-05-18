@@ -77,7 +77,7 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${(session as any)?.accessToken}`
+                    "Authorization": `Bearer ${session?.accessToken}`
                 },
                 body: JSON.stringify(payload),
             })

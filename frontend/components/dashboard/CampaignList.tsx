@@ -38,7 +38,7 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
     const router = useRouter();
 
     const fetchCampaigns = async () => {
-        const token = (session as any)?.accessToken;
+        const token = session?.accessToken;
         if (!token) return;
 
         try {
@@ -62,7 +62,7 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
     }, [session, refreshKey]);
 
     const handleDelete = async (id: string) => {
-        const token = (session as any)?.accessToken;
+        const token = session?.accessToken;
         if (!token) return;
 
         setDeletingId(id);
