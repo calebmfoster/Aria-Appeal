@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: aria_appeal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://app:app@postgres/aria_appeal
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_CORS_ORIGINS=["http://localhost:3000"]
+      - TTS_MODE=mock
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: ./backend
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://app:app@postgres/aria_appeal
+      - REDIS_URL=redis://redis:6379/0
+      - TTS_MODE=mock
+    depends_on:
+      - backend
+      - redis
+
+  frontend:
+    build: ./frontend
+    # For development, we might want to mount volume and run dev server instead of production build
+    # But enabling 'npm run dev' in separate container is tricky with node_modules.
+    # Let's use the production build for now to verify it runs, but locally user usually runs 'npm run dev' outside docker.
+    # Actually, let's set it up for dev mode to be useful?
+    # No, 'npm run dev' is better run on host for speed.
+    # This container allows running the whole stack for verification/deployment.
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_INTERNAL_API_URL=http://backend:8000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

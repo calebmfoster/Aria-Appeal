@@ -1,0 +1,8 @@
+{
+  "llm_provider": "ollama",
+  "llm_base_url": "http://localhost:11434/v1",
+  "llm_api_key": "ollama",
+  "llm_model": "llama3",
+  "tts_provider": "qwen3-local",
+  "tts_model": "qwen3-tts"
+}

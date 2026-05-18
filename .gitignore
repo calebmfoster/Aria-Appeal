@@ -1,0 +1,52 @@
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+backend/.venv/
+
+# Node
+node_modules/
+.next/
+.swc/
+*.tsbuildinfo
+
+# Secrets — never commit
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/config.json
+frontend/.env.local
+
+# Build artifacts
+/build/
+/dist/
+/static/audio/
+/static/voice_uploads/
+backend/static/audio/
+backend/static/voice_uploads/
+
+# Local infra
+backend/Redis/
+backend/Redis-x64.zip
+
+# Logs and scratch
+*.log
+backend/debug_*.txt
+backend/debug_*.md
+backend/seed_output.txt
+backend/test_4s.wav
+backend/test_output.txt
+frontend/test_out.txt
+/test_output.txt
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude Code local overrides
+.claude/settings.local.json
