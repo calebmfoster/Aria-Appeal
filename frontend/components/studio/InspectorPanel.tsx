@@ -5,6 +5,7 @@ import { useStudioStore } from '@/store/studioStore';
 import { Textarea } from '@/components/ui/textarea';
 import { useSession } from 'next-auth/react';
 import { API_URL } from '@/lib/config';
+import { apiFetch } from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Loader2, Check, AlertCircle, Wand2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -15,6 +16,60 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import type { VoiceProfile } from '@/types/studio';
+
+const PRESET_SPEAKERS = [
+    { value: 'Aiden',  label: 'Aiden — Male (default)' },
+    { value: 'Serena', label: 'Serena — Female' },
+    { value: 'Vivian', label: 'Vivian — Female' },
+    { value: 'Ryan',   label: 'Ryan — Male' },
+    { value: 'Dylan',  label: 'Dylan — Male' },
+    { value: 'Sohee',  label: 'Sohee — Female' },
+];
+
+function VoiceTabToggle({ tab, onChange }: { tab: 'preset' | 'cloned'; onChange: (t: 'preset' | 'cloned') => void }) {
+    return (
+        <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg">
+            <button
+                type="button"
+                onClick={() => onChange('preset')}
+                className={`flex-1 text-[11px] py-1 rounded-md font-medium transition-all ${
+                    tab === 'preset' ? 'bg-white text-moore-black shadow-sm' : 'text-moore-mid-gray hover:text-moore-dark-gray'
+                }`}
+            >
+                Emotional Intelligence
+            </button>
+            <button
+                type="button"
+                onClick={() => onChange('cloned')}
+                className={`flex-1 text-[11px] py-1 rounded-md font-medium transition-all ${
+                    tab === 'cloned' ? 'bg-white text-moore-black shadow-sm' : 'text-moore-mid-gray hover:text-moore-dark-gray'
+                }`}
+            >
+                Cloned
+            </button>
+        </div>
+    );
+}
+
+function VoiceSelectContent({ tab, voiceProfiles }: { tab: 'preset' | 'cloned'; voiceProfiles: VoiceProfile[] }) {
+    return (
+        <SelectContent>
+            {tab === 'preset' && <SelectItem value="default">Default / Auto</SelectItem>}
+            {tab === 'preset' && PRESET_SPEAKERS.map(p => (
+                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            ))}
+            {tab === 'cloned' && voiceProfiles.map(vp => (
+                <SelectItem key={vp.id} value={vp.id}>{vp.name}</SelectItem>
+            ))}
+            {tab === 'cloned' && voiceProfiles.length === 0 && (
+                <div className="px-3 py-4 text-center text-xs text-moore-mid-gray italic">
+                    No cloned voices yet.<br />Upload one from the dashboard.
+                </div>
+            )}
+        </SelectContent>
+    );
+}
 
 function formatTime(ms: number): string {
     const totalSec = Math.floor(ms / 1000);
@@ -46,6 +101,13 @@ const InspectorPanel: React.FC = () => {
     const activeSegment = script.find(s => s.id === activeSegmentId);
     const [rewritePrompt, setRewritePrompt] = useState('');
     const [isRewriting, setIsRewriting] = useState(false);
+    const [voiceTab, setVoiceTab] = useState<'preset' | 'cloned'>('preset');
+
+    // Sync tab to the active segment's current voice type
+    useEffect(() => {
+        const seg = script.find(s => s.id === activeSegmentId);
+        setVoiceTab(seg?.voice_profile_id ? 'cloned' : 'preset');
+    }, [activeSegmentId]);
 
     // Debounced auto-save: saves dirty segment to backend after 800ms of inactivity
     const scheduleSave = useCallback((segmentId: string) => {
@@ -67,12 +129,10 @@ const InspectorPanel: React.FC = () => {
                 if (segment.speaker_preset !== undefined) body.speaker_preset = segment.speaker_preset || null;
                 if (segment.pitch_shift !== undefined) body.pitch_shift = segment.pitch_shift ?? 0;
 
-                const res = await fetch(`${API_URL}/projects/${projectId}/segments/${segmentId}`, {
+                const res = await apiFetch(`/projects/${projectId}/segments/${segmentId}`, {
                     method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
+                    headers: { 'Content-Type': 'application/json' },
+                    token,
                     body: JSON.stringify(body),
                 });
 
@@ -103,15 +163,6 @@ const InspectorPanel: React.FC = () => {
         updateSegment(activeSegment.id, { text });
         scheduleSave(activeSegment.id);
     };
-
-    const PRESET_SPEAKERS = [
-        { value: 'Aiden',    label: 'Aiden — Male (default)' },
-        { value: 'Serena',   label: 'Serena — Female' },
-        { value: 'Vivian',   label: 'Vivian — Female' },
-        { value: 'Ryan',     label: 'Ryan — Male' },
-        { value: 'Dylan',    label: 'Dylan — Male' },
-        { value: 'Sohee',    label: 'Sohee — Female' },
-    ];
 
     const handleVoiceChange = (val: string) => {
         if (!activeSegment) return;
@@ -145,12 +196,10 @@ const InspectorPanel: React.FC = () => {
             const token = session?.accessToken;
             if (!token) throw new Error('Not authenticated');
 
-            const res = await fetch(`${API_URL}/projects/rewrite-segment`, {
+            const res = await apiFetch('/projects/rewrite-segment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
+                headers: { 'Content-Type': 'application/json' },
+                token,
                 body: JSON.stringify({
                     text: activeSegment.text,
                     prompt: rewritePrompt.trim(),
@@ -186,12 +235,10 @@ const InspectorPanel: React.FC = () => {
             console.log('[Regenerate] Emotion:', latestSegment.emotion);
             console.log('[Regenerate] Voice:', latestSegment.voice_profile_id);
 
-            const response = await fetch(`${API_URL}/regenerate-segment`, {
+            const response = await apiFetch('/regenerate-segment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: { 'Content-Type': 'application/json' },
+                token,
                 body: JSON.stringify({
                     sentence_id: latestSegment.id,
                     text: latestSegment.text,
@@ -200,7 +247,7 @@ const InspectorPanel: React.FC = () => {
                     original_file_url: null,
                     emotion: latestSegment.emotion || '',
                     voice_profile_id: latestSegment.voice_profile_id || null
-                })
+                }),
             });
 
             if (!response.ok) throw new Error('Generation failed');
@@ -218,9 +265,7 @@ const InspectorPanel: React.FC = () => {
     const pollTask = async (taskId: string, token: string, segmentId: string) => {
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`${API_URL}/generate-audio/${taskId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await apiFetch(`/generate-audio/${taskId}`, { token });
                 const statusData = await res.json();
 
                 if (statusData.status === 'SUCCESS') {
@@ -259,12 +304,10 @@ const InspectorPanel: React.FC = () => {
         currentScript.forEach(async (seg) => {
             setGeneratingSegment(seg.id, true);
             try {
-                const response = await fetch(`${API_URL}/regenerate-segment`, {
+                const response = await apiFetch('/regenerate-segment', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Content-Type': 'application/json' },
+                    token,
                     body: JSON.stringify({
                         sentence_id: seg.id,
                         text: seg.text,
@@ -273,7 +316,7 @@ const InspectorPanel: React.FC = () => {
                         original_file_url: null,
                         emotion: seg.emotion || '',
                         voice_profile_id: seg.voice_profile_id || null
-                    })
+                    }),
                 });
 
                 if (response.ok) {
@@ -324,27 +367,35 @@ const InspectorPanel: React.FC = () => {
 
                 <div className="space-y-4 border-t border-gray-100 pt-5">
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-moore-dark-gray">Global Voice Profile</label>
+                        <label className="text-sm font-medium text-moore-dark-gray">Global Voice</label>
+                        <VoiceTabToggle tab={voiceTab} onChange={setVoiceTab} />
                         <Select
-                            value={script.length > 0 && script.every(s => s.voice_profile_id === script[0]?.voice_profile_id) ? (script[0]?.voice_profile_id || "default") : "default"}
+                            value={(() => {
+                                if (script.length === 0) return 'default';
+                                const first = script[0];
+                                if (voiceTab === 'preset' && first?.speaker_preset && script.every(s => s.speaker_preset === first.speaker_preset)) return first.speaker_preset;
+                                if (voiceTab === 'cloned' && first?.voice_profile_id && script.every(s => s.voice_profile_id === first.voice_profile_id)) return first.voice_profile_id;
+                                return 'default';
+                            })()}
                             onValueChange={(val) => {
-                                const voiceId = val === "default" ? undefined : val;
+                                const isPreset = PRESET_SPEAKERS.some(p => p.value === val);
                                 script.forEach(s => {
-                                    updateSegment(s.id, { voice_profile_id: voiceId });
+                                    if (val === 'default') {
+                                        updateSegment(s.id, { voice_profile_id: undefined, speaker_preset: undefined });
+                                    } else if (isPreset) {
+                                        updateSegment(s.id, { voice_profile_id: undefined, speaker_preset: val });
+                                    } else {
+                                        updateSegment(s.id, { voice_profile_id: val, speaker_preset: undefined });
+                                    }
                                     scheduleSave(s.id);
                                 });
-                                toast.success("Voice profile applied to all segments.");
+                                toast.success('Voice applied to all segments.');
                             }}
                         >
                             <SelectTrigger className="rounded-xl border-gray-200 focus:ring-moore-red/30">
-                                <SelectValue placeholder="Select a voice profile..." />
+                                <SelectValue placeholder="Select a voice..." />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="default">Default / Auto</SelectItem>
-                                {voiceProfiles.map(vp => (
-                                    <SelectItem key={vp.id} value={vp.id}>{vp.name}</SelectItem>
-                                ))}
-                            </SelectContent>
+                            <VoiceSelectContent tab={voiceTab} voiceProfiles={voiceProfiles} />
                         </Select>
                     </div>
 
@@ -391,15 +442,6 @@ const InspectorPanel: React.FC = () => {
                 </div>
             )}
 
-            <div className="space-y-1.5">
-                <label className="text-sm font-medium text-moore-dark-gray">Script Text</label>
-                <Textarea
-                    value={activeSegment.text}
-                    onChange={(e) => handleTextChange(e.target.value)}
-                    className="rounded-xl border-gray-200 focus:ring-moore-red/30 text-sm"
-                />
-            </div>
-
             {/* Prompt-Based Rewrite */}
             <div className="space-y-1.5">
                 <label className="text-sm font-medium text-moore-dark-gray flex items-center gap-1.5">
@@ -428,27 +470,18 @@ const InspectorPanel: React.FC = () => {
 
             <div className="space-y-1.5">
                 <label className="text-sm font-medium text-moore-dark-gray">Voice</label>
+                <VoiceTabToggle tab={voiceTab} onChange={setVoiceTab} />
                 <Select
-                    value={activeSegment.speaker_preset || activeSegment.voice_profile_id || "default"}
+                    value={voiceTab === 'preset'
+                        ? (activeSegment.speaker_preset || 'default')
+                        : (activeSegment.voice_profile_id || 'default')
+                    }
                     onValueChange={handleVoiceChange}
                 >
                     <SelectTrigger className="rounded-xl border-gray-200 focus:ring-moore-red/30">
                         <SelectValue placeholder="Select a voice..." />
                     </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="default">Default / Auto</SelectItem>
-                        {PRESET_SPEAKERS.map(p => (
-                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                        ))}
-                        {voiceProfiles.length > 0 && (
-                            <>
-                                <div className="px-2 py-1 text-[10px] font-semibold text-moore-mid-gray uppercase tracking-wider">Cloned Voices</div>
-                                {voiceProfiles.map(vp => (
-                                    <SelectItem key={vp.id} value={vp.id}>{vp.name}</SelectItem>
-                                ))}
-                            </>
-                        )}
-                    </SelectContent>
+                    <VoiceSelectContent tab={voiceTab} voiceProfiles={voiceProfiles} />
                 </Select>
             </div>
 

@@ -50,6 +50,12 @@ class ProjectCreate(BaseModel):
     ask_amount: Optional[str] = None
 
 
+class SegmentAddRequest(BaseModel):
+    text: str
+    sequence_order: int
+    emotion: Optional[str] = None
+
+
 class SegmentRewriteRequest(BaseModel):
     text: str
     prompt: str

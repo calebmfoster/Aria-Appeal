@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/config';
+import { apiFetch } from '@/lib/api';
 import { Loader2, Mic, MoreVertical, Trash2, AudioLines, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -42,9 +42,7 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
         if (!token) return;
 
         try {
-            const res = await fetch(`${API_URL}/projects`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await apiFetch('/projects', { token });
             if (!res.ok) throw new Error('Failed to fetch');
             const data: Campaign[] = await res.json();
             setCampaigns(data);
@@ -67,10 +65,7 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
 
         setDeletingId(id);
         try {
-            const res = await fetch(`${API_URL}/projects/${id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await apiFetch(`/projects/${id}`, { method: 'DELETE', token });
             if (!res.ok) throw new Error('Delete failed');
             setCampaigns((prev) => prev.filter((c) => c.id !== id));
             toast.success('Campaign deleted');

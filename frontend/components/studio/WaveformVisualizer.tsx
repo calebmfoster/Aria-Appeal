@@ -5,7 +5,7 @@ import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.js';
 import { useStudioStore } from '@/store/studioStore';
 import { API_URL } from '@/lib/config';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, ZoomIn } from 'lucide-react';
 
 function formatWaveformTime(seconds: number): string {
     const min = Math.floor(seconds / 60);
@@ -193,6 +193,19 @@ const WaveformVisualizer: React.FC = () => {
         }
     }, [activeSegmentId]);
 
+    const [volume, setVolume] = useState(1);
+    const [zoom, setZoom] = useState(50);
+
+    const handleVolumeChange = (val: number) => {
+        setVolume(val);
+        wavesurferRef.current?.setVolume(val);
+    };
+
+    const handleZoomChange = (val: number) => {
+        setZoom(val);
+        wavesurferRef.current?.zoom(val);
+    };
+
     const activeSegmentAudioLoaded = !!script.find(s => s.id === activeSegmentId)?.audio_url;
     const hasAudioToPlay = !!audioUrl || activeSegmentAudioLoaded;
 
@@ -200,11 +213,19 @@ const WaveformVisualizer: React.FC = () => {
         <div className="w-full h-full p-4 bg-white rounded-2xl border border-gray-100 flex flex-col justify-center">
             <div ref={containerRef} className="w-full" />
 
-            {/* Time Display + Playback Controls */}
+            {/* Playback Controls */}
             <div className="flex justify-center items-center gap-4 mt-6">
                 <span className="text-xs font-mono text-moore-mid-gray w-16 text-right tabular-nums">
                     {formatWaveformTime(currentTime)}
                 </span>
+                <button
+                    disabled={!hasAudioToPlay}
+                    onClick={() => wavesurferRef.current?.skip(-5)}
+                    className="flex flex-col items-center gap-0.5 text-moore-mid-gray hover:text-moore-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                    <SkipBack className="h-4 w-4" />
+                    <span className="text-[9px] tabular-nums">5s</span>
+                </button>
                 <button
                     disabled={!hasAudioToPlay}
                     onClick={() => setIsPlaying(!isPlaying)}
@@ -216,9 +237,41 @@ const WaveformVisualizer: React.FC = () => {
                 >
                     {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
                 </button>
+                <button
+                    disabled={!hasAudioToPlay}
+                    onClick={() => wavesurferRef.current?.skip(5)}
+                    className="flex flex-col items-center gap-0.5 text-moore-mid-gray hover:text-moore-black disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                    <SkipForward className="h-4 w-4" />
+                    <span className="text-[9px] tabular-nums">5s</span>
+                </button>
                 <span className="text-xs font-mono text-moore-mid-gray w-16 tabular-nums">
                     {formatWaveformTime(duration)}
                 </span>
+            </div>
+
+            {/* Volume + Zoom */}
+            <div className="flex items-center gap-6 mt-4 px-2">
+                <div className="flex items-center gap-2 flex-1">
+                    <Volume2 className="h-3.5 w-3.5 text-moore-mid-gray flex-shrink-0" />
+                    <input
+                        type="range"
+                        min={0} max={1} step={0.02}
+                        value={volume}
+                        onChange={e => handleVolumeChange(parseFloat(e.target.value))}
+                        className="flex-1 accent-moore-red"
+                    />
+                </div>
+                <div className="flex items-center gap-2 flex-1">
+                    <ZoomIn className="h-3.5 w-3.5 text-moore-mid-gray flex-shrink-0" />
+                    <input
+                        type="range"
+                        min={10} max={300} step={10}
+                        value={zoom}
+                        onChange={e => handleZoomChange(parseFloat(e.target.value))}
+                        className="flex-1 accent-moore-red"
+                    />
+                </div>
             </div>
 
             {(!audioUrl && !activeSegmentAudioLoaded) && (

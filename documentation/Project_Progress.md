@@ -1,7 +1,44 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-03-21
-**Phase**: Phase IX Complete — Ready for Phase X
+**Date**: 2026-05-20
+**Phase**: Phase X — Session 9 Complete
+
+## Session 9 (2026-05-20)
+
+### Studio — Inline Text Editing
+- Single-click a segment in ScriptEditor opens it for inline editing (textarea with `autoFocus`)
+- Click empty space in the script panel to deselect and return to Global Settings view
+- Removed double-click mechanic and the redundant Script Text textarea from InspectorPanel
+- Debounced save (800ms) fires on every keystroke, same pattern as InspectorPanel
+
+### Studio — Segment Add / Delete
+- Backend: `POST /projects/{id}/segments` inserts at `sequence_order`, shifts later segments down
+- Backend: `DELETE /projects/{id}/segments/{id}` removes audio file and re-compacts sequence_orders
+- Frontend: `addSegment` / `removeSegment` store actions; "+ Add segment" dashed button at list bottom
+- Delete uses two-click confirm with 3s auto-revert
+- Delete re-exports master waveform if all remaining segments have audio; add clears stale master
+
+### Studio — Waveform Controls
+- Volume slider (0–1) with `Volume2` icon
+- Skip ±5s buttons flanking play button
+- Zoom slider (10–300 px/s) with `ZoomIn` icon
+
+### Studio — Voice Picker Redesign
+- `PRESET_SPEAKERS` moved to module level; shared `VoiceTabToggle` + `VoiceSelectContent` sub-components
+- Both global and per-segment voice selects now have Emotional Intelligence / Cloned pill toggle
+- Tab auto-syncs when switching segments (cloned voice → Cloned tab, otherwise Emotional Intelligence)
+- Global select now correctly handles `speaker_preset` alongside `voice_profile_id`
+- "Default / Auto" removed from Cloned tab; empty state shown if no cloned voices exist
+
+### Frontend — apiFetch Migration
+- All raw `fetch` calls in InspectorPanel, ScriptEditor, CampaignList, VoiceList, create-campaign-modal, and studio page migrated to `apiFetch` wrapper
+- 401 responses now fire `aria:unauthorized` and surface `SessionExpiredModal`
+
+### Bug Fixes
+- `isPlayingCurrent` red highlight now only shows when `isPlaying` is true (was persisting after deselect)
+- Click-off deselect: outer ScriptEditor container deselects on click; segment cards stop propagation
+
+---
 
 ## Completed Tasks
 

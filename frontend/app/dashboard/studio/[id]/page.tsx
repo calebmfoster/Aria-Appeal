@@ -7,6 +7,7 @@ import WaveformVisualizer from '@/components/studio/WaveformVisualizer';
 import InspectorPanel from '@/components/studio/InspectorPanel';
 import { useStudioStore } from '@/store/studioStore';
 import { API_URL } from '@/lib/config';
+import { apiFetch } from '@/lib/api';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
@@ -33,9 +34,7 @@ export default function StudioPage() {
                     await fetchProjectData(projectId, token);
                     setIsLoadingProject(false);
 
-                    const profilesRes = await fetch(`${API_URL}/voice-profiles`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                    });
+                    const profilesRes = await apiFetch('/voice-profiles', { token });
                     if (profilesRes.ok) {
                         const profiles = await profilesRes.json();
                         useStudioStore.getState().setVoiceProfiles(profiles);
@@ -137,12 +136,10 @@ export default function StudioPage() {
     const handleGenerateFullAudio = async () => {
         setIsGenerating(true);
         try {
-            const res = await fetch(`${API_URL}/projects/${projectId}/export`, {
+            const res = await apiFetch(`/projects/${projectId}/export`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.accessToken}`
-                }
+                headers: { 'Content-Type': 'application/json' },
+                token: session?.accessToken,
             });
             if (!res.ok) {
                 const errorData = await res.json();

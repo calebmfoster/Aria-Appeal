@@ -3,7 +3,7 @@ import * as React from "react"
 import { Modal } from "@/components/ui/modal"
 import { Input } from "@/components/ui/input"
 import { useSession } from "next-auth/react"
-import { API_URL } from "@/lib/config"
+import { apiFetch } from "@/lib/api"
 import toast from 'react-hot-toast'
 import { ChevronDown, Loader2, Sparkles, FileText } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
@@ -73,12 +73,10 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                 if (formData.ask_amount.trim()) payload.ask_amount = formData.ask_amount.trim();
             }
 
-            const res = await fetch(`${API_URL}/projects`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${session?.accessToken}`
-                },
+            const res = await apiFetch('/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                token: session?.accessToken,
                 body: JSON.stringify(payload),
             })
 
