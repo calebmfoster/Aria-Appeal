@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { API_URL } from '@/lib/config';
+import { apiFetch } from '@/lib/api';
 import { Trash2, Mic, Play, Square, Loader2 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import type { VoiceProfile } from '@/types/studio';
@@ -20,11 +21,7 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
 
     const fetchProfiles = async () => {
         try {
-            const response = await fetch(`${API_URL}/voice-profiles/`, {
-                headers: {
-                    'Authorization': `Bearer ${session?.accessToken}`
-                }
-            });
+            const response = await apiFetch('/voice-profiles/', { token: session?.accessToken });
             if (response.ok) {
                 const data = await response.json();
                 setProfiles(data);
@@ -38,12 +35,7 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
 
     const deleteProfile = async (id: string) => {
         try {
-            const response = await fetch(`${API_URL}/voice-profiles/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${session?.accessToken}`
-                }
-            });
+            const response = await apiFetch(`/voice-profiles/${id}`, { method: 'DELETE', token: session?.accessToken });
             if (response.ok) {
                 if (playingId === id) stopPlayback();
                 setProfiles(profiles.filter(p => p.id !== id));

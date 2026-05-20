@@ -8,7 +8,7 @@ from app.api.deps import limiter
 from app.models.user import User
 from app.models.project import Project, ProjectStatus
 from app.models.script_segment import ScriptSegment
-from app.schemas.project import ProjectCreate, ProjectRead, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse
+from app.schemas.project import ProjectCreate, ProjectRead, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse, SegmentAddRequest
 from app.services.llm import LLMService
 from app.core.system_config import config_manager
 from app.services.mastering_service import mastering_service
@@ -413,6 +413,85 @@ async def update_segment(
     await db.commit()
     await db.refresh(segment)
     return segment
+
+
+@router.post("/{project_id}/segments", response_model=ScriptSegmentRead)
+async def add_segment(
+    project_id: uuid.UUID,
+    body: SegmentAddRequest,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Add a new segment at the given sequence_order, shifting later segments down."""
+    stmt = select(Project).where(Project.id == project_id, Project.user_id == current_user.id)
+    result = await db.execute(stmt)
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Shift existing segments at or after the insertion point
+    stmt = select(ScriptSegment).where(
+        ScriptSegment.project_id == project_id,
+        ScriptSegment.sequence_order >= body.sequence_order
+    )
+    result = await db.execute(stmt)
+    for seg in result.scalars().all():
+        seg.sequence_order += 1
+
+    new_segment = ScriptSegment(
+        project_id=project_id,
+        text=body.text,
+        sequence_order=body.sequence_order,
+        emotion=body.emotion,
+    )
+    db.add(new_segment)
+    await db.commit()
+    await db.refresh(new_segment)
+    return new_segment
+
+
+@router.delete("/{project_id}/segments/{segment_id}")
+async def delete_segment(
+    project_id: uuid.UUID,
+    segment_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Delete a segment, remove its audio file, and re-compact sequence_orders."""
+    stmt = select(Project).where(Project.id == project_id, Project.user_id == current_user.id)
+    result = await db.execute(stmt)
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    stmt = select(ScriptSegment).where(
+        ScriptSegment.id == segment_id,
+        ScriptSegment.project_id == project_id
+    )
+    result = await db.execute(stmt)
+    segment = result.scalars().first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    deleted_order = segment.sequence_order
+
+    if segment.audio_url:
+        filename = segment.audio_url.split("/")[-1]
+        local_path = os.path.join(tts_service.output_dir, filename)
+        if os.path.exists(local_path):
+            os.remove(local_path)
+
+    await db.delete(segment)
+
+    # Close the gap in sequence_orders
+    stmt = select(ScriptSegment).where(
+        ScriptSegment.project_id == project_id,
+        ScriptSegment.sequence_order > deleted_order
+    )
+    result = await db.execute(stmt)
+    for seg in result.scalars().all():
+        seg.sequence_order -= 1
+
+    await db.commit()
+    return {"message": "Segment deleted"}
 
 
 @router.delete("/{project_id}")

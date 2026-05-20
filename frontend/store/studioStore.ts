@@ -38,6 +38,8 @@ interface StudioState {
     setActiveSegment: (id: string | null) => void;
     setGeneratingSegment: (id: string, isGenerating: boolean) => void;
     fetchProjectData: (projectId: string, token: string) => Promise<void>;
+    addSegment: (segment: ScriptSegment) => void;
+    removeSegment: (id: string) => void;
 
     // Save actions
     setSaveStatus: (status: SaveStatus) => void;
@@ -101,6 +103,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             ...state.generatingSegments,
             [id]: isGenerating
         }
+    })),
+
+    addSegment: (segment) => set((state) => ({
+        script: [...state.script, segment],
+    })),
+
+    removeSegment: (id) => set((state) => ({
+        script: state.script.filter(s => s.id !== id),
+        activeSegmentId: state.activeSegmentId === id ? null : state.activeSegmentId,
+        dirtySegments: Object.fromEntries(Object.entries(state.dirtySegments).filter(([k]) => k !== id)),
+        generatingSegments: Object.fromEntries(Object.entries(state.generatingSegments).filter(([k]) => k !== id)),
     })),
 
     setSaveStatus: (saveStatus) => set({ saveStatus }),
