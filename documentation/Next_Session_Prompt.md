@@ -1,89 +1,76 @@
-# Next Session Prompt: Phase X (Session 9) — Tier 3 Segment & Waveform Features
+# Next Session Prompt: Phase X (Session 10) — Voice Cloning Legal Disclaimer & Dashboard Polish
 
 Read `CLAUDE.md`, `documentation/Project_Progress.md`, `documentation/Open_Issues.md` for full context.
 
 ---
 
-## State After Session 8 (Complete)
+## State After Session 9 (Complete)
 
-App is published to private GitHub at `https://github.com/calebmfoster/Aria-Appeal`.
-
-Audio cohesion is fully implemented:
-- Per-segment normalization: –45 dBFS silence trim → 30ms/120ms padding → –18 LUFS in `backend/app/services/audio_normalize.py` + wired into `tts_engine.py` after pitch shift
-- Master export: 25ms logarithmic crossfade stitching + –16 LUFS final pass in `mastering_service.py`
-- Clone-path reference tail: 3.0 s (was 2.0 s) in `projects.py`
-
-NextAuth type safety resolved — `frontend/types/next-auth.d.ts` added, 6 casts removed.
-Session timeout handled — `SessionExpiredModal.tsx` + `lib/api.ts` `apiFetch` wrapper added.
+Studio is significantly more polished:
+- **Inline text editing**: single-click to edit, click-off to deselect back to Global Settings
+- **Segment CRUD**: add/delete with waveform auto-update
+- **Waveform controls**: volume, skip ±5s, zoom
+- **Voice picker**: Emotional Intelligence / Cloned tab toggle on both global and per-segment selects; auto-syncs to segment's voice type
+- **apiFetch migration**: all fetch calls covered; 401s surface SessionExpiredModal
+- All session 9 changes committed and pushed to `https://github.com/calebmfoster/Aria-Appeal`
 
 ---
 
-## SESSION 9 PRIORITIES
+## SESSION 10 PRIORITIES
 
-### Priority 1 — Inline Text Editing in ScriptEditor
+### Priority 1 — Legal Disclaimer for Voice Cloning
 
-**Problem:** Users must click a segment in ScriptEditor, then scroll to InspectorPanel to edit text. This two-pane friction adds steps to the most common workflow.
+**Problem:** Users can upload any audio and generate a cloned voice with no acknowledgment of rights/permissions. This is a legal and trust risk.
+
+**Flow:**
+- In `frontend/components/dashboard/VoiceUpload.tsx`, gate the upload form behind a consent step
+- Before the form fields are shown (or as a blocking modal/step), display a clear disclaimer:
+  > "By uploading this audio, you confirm that you have the explicit rights and consent of the voice owner to use this recording for AI voice synthesis. Uploading audio without authorization may violate applicable laws."
+- User must check a checkbox to proceed — the form fields and submit button are disabled/hidden until accepted
+- Checkbox state is local (no backend storage needed for now)
+- Keep the flow clean: one step, no multi-page wizard
+
+**Outcome paths:**
+- **Accepted** → form unlocks, user proceeds normally
+- **Not accepted** → form remains locked, no upload possible
+
+**Key file:** `frontend/components/dashboard/VoiceUpload.tsx`
+
+---
+
+### Priority 2 — Segment Reorder (Drag-and-Drop)
+
+**Problem:** Users cannot reorder segments without deleting and re-adding them.
 
 **Implementation:**
-- `frontend/components/studio/ScriptEditor.tsx` — add inline `<textarea>` that appears on double-click of a segment's text `<p>`. On blur, call `scheduleSave` from the store (or pass it down as a prop from the store actions).
-- Wire to existing `updateSegment(id, { text })` + `dirtySegments` tracking (already works via InspectorPanel — ScriptEditor just needs to call the same actions).
-- Inspector should stay in sync automatically since both read from Zustand `script`.
-- Keep `scheduleSave` in InspectorPanel for now; extract to a shared hook later if needed.
+- Add drag-and-drop to `ScriptEditor.tsx` using `@dnd-kit/core` + `@dnd-kit/sortable` (already a good fit for the card list)
+- On drop, call a new backend endpoint `PATCH /projects/{id}/segments/reorder` with the new ordered array of segment IDs
+- Backend updates `sequence_order` for all affected segments in one transaction
+- Store: update `script` array order after confirmed reorder
+- After reorder, clear master audio URL (stale) — user re-exports manually
 
-**Key files:** `frontend/components/studio/ScriptEditor.tsx`, `frontend/store/studioStore.ts`
-
----
-
-### Priority 2 — Segment Management (Add / Delete)
-
-Start with add and delete only. Split/merge/reorder are lower priority.
-
-**Backend endpoints needed:**
-
-```python
-# POST /api/v1/projects/{project_id}/segments
-# Creates a new empty segment at given sequence_order, shifts others down
-body: { text: str, sequence_order: int, emotion?: str }
-response: ScriptSegmentRead
-
-# DELETE /api/v1/projects/{project_id}/segments/{segment_id}
-# Deletes segment + its audio file; recalculates timestamps
-response: { message: str }
-```
-
-**Frontend:**
-- "Add segment" button below each ScriptEditor card (+ at bottom of list)
-- Confirmation dialog on segment delete (reuse existing confirm pattern from VoiceList/CampaignList)
-- Store actions: `addSegment(segment)`, `removeSegment(id)` — update `script` array, reset `activeSegmentId` if deleted
-- After delete, call `handleGenerateFullAudio` to re-export master
-
-**Key files:** `backend/app/api/routes/projects.py`, `frontend/components/studio/ScriptEditor.tsx`, `frontend/store/studioStore.ts`
+**Key files:** `frontend/components/studio/ScriptEditor.tsx`, `backend/app/api/routes/projects.py`
 
 ---
 
-### Priority 3 — Waveform Controls
+### Priority 3 — Voice Profile Improvements
 
-Three additions to `WaveformVisualizer.tsx`:
+Two small additions to the voice profile dashboard:
 
-1. **Volume slider** — `ws.setVolume(value)` (0–1 float). Add a small `<input type="range">` in the waveform toolbar.
-2. **Skip ±5s buttons** — `ws.skip(5)` / `ws.skip(-5)`. Two icon buttons (SkipForward5 / SkipBack5 from lucide).
-3. **Zoom slider** — `ws.zoom(pxPerSec)`. WaveSurfer v7 supports `zoom()` directly. Add `+/-` buttons or a range slider. Start at default (around 50 px/s), max ~300.
+1. **Usage indicator** — show which campaigns use each voice profile (query `/projects` and cross-reference `voice_profile_id` / `speaker_preset` in segments)
+2. **Rename voice profile** — inline edit for profile name in VoiceList (PATCH to `/voice-profiles/{id}`)
 
-**Key file:** `frontend/components/studio/WaveformVisualizer.tsx` (WaveSurfer instance is at `wsRef.current`)
+**Key files:** `frontend/components/dashboard/VoiceList.tsx`, `backend/app/api/routes/voice_profiles.py`
 
 ---
 
-### Priority 4 — Migrate Call Sites to `apiFetch`
+### Priority 4 — Campaign Status Polish
 
-`frontend/lib/api.ts` exists with the `apiFetch` wrapper (fires `aria:unauthorized` on 401) but call sites still use raw `fetch`. Migrate the highest-traffic ones:
+- Campaign cards in `CampaignList.tsx` currently show Draft / Generated / Mastered status
+- Add audio progress bar: `{audioReady}/{segmentCount} segments` is already shown — convert to a small visual progress bar
+- Show total duration on mastered campaigns (derive from segment timestamps)
 
-- `InspectorPanel.tsx` — save segment (PATCH), regenerate-segment (POST), poll task (GET)
-- `CampaignList.tsx` — list (GET), delete (DELETE)
-- `VoiceList.tsx` — list (GET), delete (DELETE)
-- `create-campaign-modal.tsx` — create (POST)
-- `studio/[id]/page.tsx` — export (POST), fetch voice profiles (GET)
-
-Skip `VoiceUpload.tsx` for now — FormData upload needs special handling (no Content-Type header override).
+**Key file:** `frontend/components/dashboard/CampaignList.tsx`
 
 ---
 
@@ -91,15 +78,15 @@ Skip `VoiceUpload.tsx` for now — FormData upload needs special handling (no Co
 
 | Feature | Key Files |
 |---------|-----------|
-| Inline text editing | `frontend/components/studio/ScriptEditor.tsx`, `studioStore.ts` |
-| Segment add/delete | `backend/app/api/routes/projects.py`, `ScriptEditor.tsx`, `studioStore.ts` |
-| Waveform controls | `frontend/components/studio/WaveformVisualizer.tsx` |
-| apiFetch migration | `frontend/lib/api.ts`, all component files listed above |
+| Legal disclaimer | `frontend/components/dashboard/VoiceUpload.tsx` |
+| Segment reorder | `frontend/components/studio/ScriptEditor.tsx`, `backend/app/api/routes/projects.py` |
+| Voice profile improvements | `frontend/components/dashboard/VoiceList.tsx` |
+| Campaign status polish | `frontend/components/dashboard/CampaignList.tsx` |
 
 ## Session End Checklist
 
 At end of session, update:
-- `documentation/Project_Progress.md` — add Session 9 entry
+- `documentation/Project_Progress.md` — add Session 10 entry
 - `documentation/Open_Issues.md` — close resolved items
-- `documentation/Next_Session_Prompt.md` — set Session 10 priorities
+- `documentation/Next_Session_Prompt.md` — set Session 11 priorities
 - Commit + push to `https://github.com/calebmfoster/Aria-Appeal`
