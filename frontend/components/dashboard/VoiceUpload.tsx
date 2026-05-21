@@ -18,6 +18,7 @@ interface ValidationResult {
 }
 
 export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => {
+    const [hasConsented, setHasConsented] = useState(false);
     const [name, setName] = useState('');
     const [referenceText, setReferenceText] = useState('');
     const [file, setFile] = useState<File | null>(null);
@@ -119,6 +120,24 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                        By uploading this audio, you confirm that you have the explicit rights and consent of the voice owner to use this recording for AI voice synthesis. Uploading audio without authorization may violate applicable laws.
+                    </p>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={hasConsented}
+                            onChange={(e) => setHasConsented(e.target.checked)}
+                            className="h-4 w-4 rounded border-amber-400 accent-moore-red cursor-pointer"
+                        />
+                        <span className="text-xs font-medium text-amber-900">
+                            I confirm I have the rights to use this audio
+                        </span>
+                    </label>
+                </div>
+
+                <div className={`space-y-4 transition-opacity ${hasConsented ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium text-moore-dark-gray">Profile Name</label>
                     <Input
@@ -126,6 +145,7 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
                         onChange={(e) => setName(e.target.value)}
                         placeholder="e.g. Professional Male 1"
                         className="rounded-xl border-gray-200 bg-white text-moore-black focus:ring-2 focus:ring-moore-red/30 focus:border-moore-red"
+                        disabled={!hasConsented}
                         required
                     />
                 </div>
@@ -138,14 +158,15 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
                         value={referenceText}
                         onChange={(e) => setReferenceText(e.target.value)}
                         placeholder="Type or paste the exact words spoken in your audio sample."
-                        className="w-full rounded-xl border border-gray-200 bg-white text-moore-black px-3 py-2 text-sm focus:ring-2 focus:ring-moore-red/30 focus:border-moore-red resize-none outline-none transition-all placeholder:text-gray-400"
+                        className="w-full rounded-xl border border-gray-200 bg-white text-moore-black px-3 py-2 text-sm focus:ring-2 focus:ring-moore-red/30 focus:border-moore-red resize-none outline-none transition-all placeholder:text-gray-400 disabled:cursor-not-allowed"
                         rows={3}
+                        disabled={!hasConsented}
                     />
                 </div>
 
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium text-moore-dark-gray">Voice Sample (WAV/MP3)</label>
-                    <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-gray-200 border-dashed rounded-xl cursor-pointer bg-moore-cream/50 hover:bg-moore-cream transition-colors">
+                    <label className={`flex flex-col items-center justify-center w-full h-28 border-2 border-gray-200 border-dashed rounded-xl bg-moore-cream/50 transition-colors ${hasConsented ? 'cursor-pointer hover:bg-moore-cream' : 'cursor-not-allowed'}`}>
                         <div className="flex flex-col items-center justify-center py-4">
                             {isValidating ? (
                                 <Loader2 className="w-6 h-6 text-moore-mid-gray animate-spin mb-2" />
@@ -163,9 +184,11 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
                             className="hidden"
                             onChange={handleFileChange}
                             accept="audio/*"
+                            disabled={!hasConsented}
                             required
                         />
                     </label>
+                </div>
                 </div>
 
                 {validation && (
@@ -194,7 +217,7 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
 
                 <button
                     type="submit"
-                    disabled={isUploading || !file || !name || (validation?.is_valid === false)}
+                    disabled={!hasConsented || isUploading || !file || !name || (validation?.is_valid === false)}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-moore-red px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-moore-red-dark transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {isUploading ? (

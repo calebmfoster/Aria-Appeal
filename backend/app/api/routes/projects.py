@@ -8,7 +8,7 @@ from app.api.deps import limiter
 from app.models.user import User
 from app.models.project import Project, ProjectStatus
 from app.models.script_segment import ScriptSegment
-from app.schemas.project import ProjectCreate, ProjectRead, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse, SegmentAddRequest
+from app.schemas.project import ProjectCreate, ProjectRead, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse, SegmentAddRequest, SegmentReorderBody
 from app.services.llm import LLMService
 from app.core.system_config import config_manager
 from app.services.mastering_service import mastering_service
@@ -378,6 +378,32 @@ async def export_project(
     await db.commit()
     
     return {"message": "Project exported successfully", "master_audio_url": master_audio_url}
+
+
+@router.patch("/{project_id}/segments/reorder")
+async def reorder_segments(
+    project_id: uuid.UUID,
+    body: SegmentReorderBody,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    stmt = select(Project).where(Project.id == project_id, Project.user_id == current_user.id)
+    result = await db.execute(stmt)
+    if not result.scalars().first():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    for i, segment_id in enumerate(body.segment_ids):
+        stmt = select(ScriptSegment).where(
+            ScriptSegment.id == segment_id,
+            ScriptSegment.project_id == project_id
+        )
+        result = await db.execute(stmt)
+        segment = result.scalars().first()
+        if segment:
+            segment.sequence_order = i
+
+    await db.commit()
+    return {"message": "Segments reordered"}
 
 
 @router.patch("/{project_id}/segments/{segment_id}", response_model=ScriptSegmentRead)

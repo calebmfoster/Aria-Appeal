@@ -1,7 +1,34 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-05-20
-**Phase**: Phase X — Session 9 Complete
+**Date**: 2026-05-21
+**Phase**: Phase X — Session 10 Complete
+
+## Session 10 (2026-05-21)
+
+### Dashboard — Voice Cloning Legal Disclaimer
+- `VoiceUpload.tsx`: Amber-card consent gate at top of form before all fields
+- Full disclaimer text required; checkbox labeled "I confirm I have the rights to use this audio"
+- Fields and submit button disabled (`opacity-40 pointer-events-none`) until checkbox checked — fields remain visible so user sees what's coming
+- Local `hasConsented` state only, no backend storage
+
+### Dashboard — Voice Profile Improvements
+- **Usage indicator**: `VoiceList.tsx` fetches `/api/v1/projects` in parallel with profiles; cross-references `segment.voice_profile_id` to show "Used in: Campaign A, B" or subtle "Unused" badge
+- **Inline rename**: Click profile name to edit inline; Enter/blur → `PATCH /api/v1/voice-profiles/{id}`; Escape to cancel; optimistic update with server confirmation
+- **Backend**: `VoiceProfileRename` Pydantic schema + `PATCH /voice-profiles/{profile_id}` endpoint added to `voice_profiles.py`; user-scoped, 404 on miss
+
+### Dashboard — Campaign Status Polish
+- `CampaignList.tsx`: `audioReady/segmentCount` text replaced with pill-shaped Tailwind progress bar (moore-red/70 fill) + count label retained
+- Total duration displayed on mastered campaigns using `Math.max(segment.end_ms)` across segments, formatted `m:ss`, shown with `AudioLines` icon
+
+### Studio — Segment Drag-and-Drop Reorder
+- `@dnd-kit/core` + `@dnd-kit/sortable` installed
+- `ScriptEditor.tsx` refactored: `SortableSegmentItem` wrapper component with `useSortable`; `GripVertical` drag handle at left of each card (cursor-grab, always visible, subtle gray)
+- `PointerSensor` with 8px activation distance to prevent accidental drag on click
+- `handleDragEnd`: optimistic `reorderSegments()` + `setAudioUrl(null)`, then `PATCH /projects/{id}/segments/reorder`; rolls back on error
+- **Backend**: `SegmentReorderBody` schema (`segment_ids: List[UUID]`) + `PATCH /{project_id}/segments/reorder` endpoint; defined before `/{segment_id}` handler so literal path takes precedence; updates `sequence_order` for all segments in one transaction
+- **Store**: `reorderSegments(orderedIds)` action added to `studioStore.ts`
+
+---
 
 ## Session 9 (2026-05-20)
 
