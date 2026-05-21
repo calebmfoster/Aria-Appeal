@@ -99,7 +99,7 @@ const WaveformVisualizer: React.FC = () => {
 
         ws.on('error', (err: Error) => {
             if (err?.name === 'AbortError') return;
-            console.error('WaveSurfer error:', err);
+            console.warn('WaveSurfer error:', err);
         });
 
         wsRegions.on('region-clicked', (region, e) => {

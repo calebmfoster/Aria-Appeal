@@ -76,7 +76,12 @@ def health_check():
     }
 
 # Mount static directory for serving audio files with CORS
-static_dir = os.path.join(os.getcwd(), "static")
+# When STATIC_AUDIO_DIR is set (worktree launch), serve from its parent so
+# /static/audio/... resolves to the main repo's audio files.
+if settings.STATIC_AUDIO_DIR:
+    static_dir = os.path.dirname(settings.STATIC_AUDIO_DIR)
+else:
+    static_dir = os.path.join(os.getcwd(), "static")
 os.makedirs(static_dir, exist_ok=True)
 
 static_app = FastAPI()
