@@ -13,7 +13,7 @@ interface Campaign {
     status: 'draft' | 'generated' | 'mastered';
     created_at: string | null;
     target_audience: { audience?: string; emotion?: string };
-    segments: { id: string; audio_url?: string; start_ms?: number; end_ms?: number }[];
+    segments: { id: string; audio_url?: string; start_time_ms?: number; end_time_ms?: number }[];
 }
 
 interface CampaignListProps {
@@ -134,7 +134,7 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
                 const audioPercent = segmentCount > 0 ? (audioReady / segmentCount) * 100 : 0;
 
                 const totalDurationMs = campaign.status === 'mastered'
-                    ? Math.max(0, ...campaign.segments.map((s) => s.end_ms ?? 0))
+                    ? Math.max(0, ...campaign.segments.map((s) => s.end_time_ms ?? 0))
                     : 0;
                 const totalSecs = Math.round(totalDurationMs / 1000);
                 const durationLabel = totalSecs > 0
