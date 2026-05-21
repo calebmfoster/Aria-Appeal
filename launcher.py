@@ -98,8 +98,67 @@ class LauncherApp(tk.Tk):
         self._cfg = _load_config()
         self._settings_open = False
 
+        self._worktrees = self._detect_worktrees()
+        self._source_var = tk.StringVar(value=self._worktrees[0][0])
+
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ── Worktree / source detection ──────────────────────────────────────────
+
+    def _detect_worktrees(self) -> list[tuple[str, Path]]:
+        """Returns [(display_name, repo_root_path), ...]. First entry is always 'main'."""
+        entries: list[tuple[str, Path]] = [("main", REPO_ROOT)]
+        try:
+            out = subprocess.check_output(
+                ["git", "worktree", "list", "--porcelain"],
+                cwd=str(REPO_ROOT), text=True,
+                creationflags=CREATE_NO_WINDOW
+            )
+            wt_path: Path | None = None
+            branch: str | None = None
+            for line in out.splitlines():
+                if line.startswith("worktree "):
+                    wt_path = Path(line[9:].strip())
+                    branch = None
+                elif line.startswith("branch "):
+                    branch = line[7:].strip().replace("refs/heads/", "")
+                elif line == "" and wt_path is not None:
+                    if wt_path != REPO_ROOT:
+                        label = branch or wt_path.name
+                        if "/" in label:
+                            label = label.split("/")[-1]
+                        entries.append((label, wt_path))
+                    wt_path = None
+                    branch = None
+        except Exception:
+            pass
+        return entries
+
+    def _parse_dotenv(self, path: Path) -> dict[str, str]:
+        if not path.exists():
+            return {}
+        result = {}
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            result[key.strip()] = val.strip().strip('"').strip("'")
+        return result
+
+    def _get_source_paths(self) -> tuple[Path, Path, Path]:
+        """Returns (frontend_dir, backend_dir, uvicorn_exe) for the selected source."""
+        selected = self._source_var.get()
+        for name, root in self._worktrees:
+            if name == selected:
+                frontend = root / "frontend"
+                backend = root / "backend"
+                uvicorn = backend / ".venv" / "Scripts" / "uvicorn.exe"
+                if not uvicorn.exists():
+                    uvicorn = VENV_UVICORN
+                return frontend, backend, uvicorn
+        return FRONTEND_DIR, BACKEND_DIR, VENV_UVICORN
 
     # ── UI construction ──────────────────────────────────────────────────────
 
@@ -116,6 +175,19 @@ class LauncherApp(tk.Tk):
 
         tk.Label(header, text="Aria Appeal  —  Dev Launcher",
                  font=self._title_font, bg=BG, fg=FG).pack(side="left")
+
+        # Source selector (only shown when worktrees exist)
+        if len(self._worktrees) > 1:
+            tk.Label(header, text="Source:", font=self._small_font,
+                     bg=BG, fg="#9ca3af").pack(side="left", padx=(20, 4))
+            names = [w[0] for w in self._worktrees]
+            om = tk.OptionMenu(header, self._source_var, *names)
+            om.configure(bg=BTN_BG, fg=FG, activebackground=BTN_ACTIVE,
+                         font=self._small_font, relief="flat", padx=6, pady=2, bd=0,
+                         highlightthickness=0)
+            om["menu"].configure(bg=BTN_BG, fg=FG, font=self._small_font,
+                                 activebackground=BTN_ACTIVE, activeforeground=FG)
+            om.pack(side="left")
 
         self._settings_btn = tk.Button(
             header, text="⚙  Settings", font=self._small_font,
@@ -366,22 +438,74 @@ class LauncherApp(tk.Tk):
         self._start_btn.configure(state="disabled")
         self._stop_btn.configure(state="normal")
 
+        frontend_dir, backend_dir, uvicorn_exe = self._get_source_paths()
+        source_name = self._source_var.get()
+        if source_name != "main":
+            self._append_log(f"[launcher] Source: {source_name}  ({frontend_dir.parent})\n")
+
+        # Build subprocess envs — inject .env files from main when using a worktree
+        backend_env = {**os.environ, "PYTHONPATH": str(backend_dir)}
+        frontend_env = dict(os.environ)
+        if source_name != "main":
+            for k, v in self._parse_dotenv(REPO_ROOT / "backend" / ".env").items():
+                backend_env.setdefault(k, v)
+            for k, v in self._parse_dotenv(REPO_ROOT / "frontend" / ".env.local").items():
+                frontend_env.setdefault(k, v)
+            # Point worktree backend at main's static/audio so existing files are found
+            main_audio = str(REPO_ROOT / "backend" / "static" / "audio")
+            backend_env["STATIC_AUDIO_DIR"] = main_audio
+            self._append_log(f"[launcher] Audio dir: {main_audio}\n")
+            missing_be = [k for k in ("DATABASE_URL",) if k not in backend_env]
+            if missing_be:
+                self._append_log(f"[launcher] Warning: {', '.join(missing_be)} not found in main .env\n")
+
         npm = shutil.which("npm")
         if not npm:
             self._append_log("[ERROR] npm not found on PATH. Cannot start frontend.\n")
             self._set_status("frontend", "error")
 
-        if not VENV_UVICORN.exists():
-            self._append_log(f"[ERROR] Uvicorn not found at {VENV_UVICORN}\n")
+        if not uvicorn_exe.exists():
+            self._append_log(f"[ERROR] Uvicorn not found at {uvicorn_exe}\n")
             self._set_status("backend", "error")
         else:
             self._launch("backend",
-                         [str(VENV_UVICORN), "app.main:app", "--reload", "--host", "0.0.0.0"],
-                         cwd=str(BACKEND_DIR),
-                         env={**os.environ, "PYTHONPATH": str(BACKEND_DIR)})
+                         [str(uvicorn_exe), "app.main:app", "--reload", "--host", "0.0.0.0"],
+                         cwd=str(backend_dir),
+                         env=backend_env)
 
         if npm:
-            self._launch("frontend", [npm, "run", "dev"], cwd=str(FRONTEND_DIR))
+            node_modules = frontend_dir / "node_modules"
+            if not node_modules.exists():
+                self._append_log(f"[frontend] node_modules missing — running npm install first...\n")
+                self._set_status("frontend", "starting")
+                threading.Thread(
+                    target=self._npm_install_then_dev,
+                    args=(npm, frontend_dir, frontend_env),
+                    daemon=True
+                ).start()
+            else:
+                self._launch("frontend", [npm, "run", "dev"], cwd=str(frontend_dir), env=frontend_env)
+
+    def _npm_install_then_dev(self, npm: str, frontend_dir: Path, env: dict | None = None):
+        try:
+            proc = subprocess.Popen(
+                [npm, "install"], cwd=str(frontend_dir), env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                creationflags=CREATE_NO_WINDOW
+            )
+            for raw in proc.stdout:
+                line = raw.decode("utf-8", errors="replace")
+                self.after(0, self._append_log, f"[frontend:install] {line}")
+            proc.wait()
+            if proc.returncode == 0:
+                self.after(0, self._append_log, "[frontend] npm install done — starting dev server...\n")
+                self.after(0, lambda: self._launch("frontend", [npm, "run", "dev"], cwd=str(frontend_dir), env=env))
+            else:
+                self.after(0, self._append_log, "[frontend] npm install FAILED\n")
+                self.after(0, self._set_status, "frontend", "error")
+        except Exception as e:
+            self.after(0, self._append_log, f"[frontend] install error: {e}\n")
+            self.after(0, self._set_status, "frontend", "error")
 
     def stop_all(self):
         self._stop_btn.configure(state="disabled")
