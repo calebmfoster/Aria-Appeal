@@ -13,7 +13,7 @@ interface Campaign {
     status: 'draft' | 'generated' | 'mastered';
     created_at: string | null;
     target_audience: { audience?: string; emotion?: string };
-    segments: { id: string; audio_url?: string }[];
+    segments: { id: string; audio_url?: string; start_time_ms?: number; end_time_ms?: number }[];
 }
 
 interface CampaignListProps {
@@ -131,6 +131,16 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
                 const status = statusConfig[campaign.status] || statusConfig.draft;
                 const segmentCount = campaign.segments?.length || 0;
                 const audioReady = campaign.segments?.filter((s) => s.audio_url).length || 0;
+                const audioPercent = segmentCount > 0 ? (audioReady / segmentCount) * 100 : 0;
+
+                const totalDurationMs = campaign.status === 'mastered'
+                    ? Math.max(0, ...campaign.segments.map((s) => s.end_time_ms ?? 0))
+                    : 0;
+                const totalSecs = Math.round(totalDurationMs / 1000);
+                const durationLabel = totalSecs > 0
+                    ? `${Math.floor(totalSecs / 60)}:${String(totalSecs % 60).padStart(2, '0')}`
+                    : null;
+
                 const date = campaign.created_at
                     ? new Date(campaign.created_at).toLocaleDateString('en-US', {
                           month: 'short',
@@ -164,9 +174,23 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
                                     {segmentCount} segments
                                 </span>
                                 {audioReady > 0 && (
+                                    <span className="flex items-center gap-1.5">
+                                        <Mic className="h-3 w-3 flex-shrink-0" />
+                                        <span className="flex items-center gap-1">
+                                            <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full bg-moore-red/70 transition-all"
+                                                    style={{ width: `${audioPercent}%` }}
+                                                />
+                                            </div>
+                                            <span>{audioReady}/{segmentCount}</span>
+                                        </span>
+                                    </span>
+                                )}
+                                {durationLabel && (
                                     <span className="flex items-center gap-1">
-                                        <Mic className="h-3 w-3" />
-                                        {audioReady}/{segmentCount} audio
+                                        <AudioLines className="h-3 w-3" />
+                                        {durationLabel}
                                     </span>
                                 )}
                             </div>

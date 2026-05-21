@@ -12,6 +12,9 @@ class VoiceProfileCreate(VoiceProfileBase):
 class VoiceProfileUpdate(VoiceProfileBase):
     name: Optional[str] = None
 
+class VoiceProfileRename(BaseModel):
+    name: str
+
 class VoiceProfileResponse(VoiceProfileBase):
     id: uuid.UUID
     user_id: uuid.UUID

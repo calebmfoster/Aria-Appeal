@@ -73,7 +73,7 @@ npm run lint                          # ESLint
 
 ## Current Phase
 
-Phase X (Session 5) complete as of 2026-04-14. TTS working end-to-end on GPU (RTX 4080 Super, PyTorch 2.11.0+cu126, bfloat16). Both preset and cloned voices working. Tier 2 features complete: AI rewrite, custom scripts, keyboard shortcuts, waveform time display, delete confirmations. DB connection and migrations are resolved.
+Phase X (Session 10) complete as of 2026-05-21. TTS working end-to-end on GPU (RTX 4080 Super, PyTorch 2.11.0+cu126, bfloat16). Studio is fully featured: inline editing, segment CRUD + drag-to-reorder, waveform controls, voice picker tabs, apiFetch migration. Dashboard polished: voice cloning legal disclaimer, voice profile usage indicator + inline rename, campaign progress bars + duration display.
 
 See `documentation/Product_Roadmap.md` for the full prioritized feature/polish backlog (Tiers 1-4).
 

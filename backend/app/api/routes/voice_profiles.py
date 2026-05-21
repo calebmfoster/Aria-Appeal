@@ -5,7 +5,7 @@ from typing import List, Optional
 import uuid
 import logging
 from app.db.session import get_db
-from app.schemas.voice_profile import VoiceProfileCreate, VoiceProfileResponse, VoiceValidationResponse
+from app.schemas.voice_profile import VoiceProfileCreate, VoiceProfileResponse, VoiceProfileRename, VoiceValidationResponse
 from app.models.voice_profile import VoiceProfile
 from app.services.voice_validator import voice_validator
 from app.services.voice_cloner import voice_cloner
@@ -94,6 +94,28 @@ async def delete_voice_profile(
     await db.delete(profile)
     await db.commit()
     return {"message": "Voice profile deleted"}
+
+@router.patch("/{profile_id}", response_model=VoiceProfileResponse)
+async def rename_voice_profile(
+    profile_id: uuid.UUID,
+    body: VoiceProfileRename,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    result = await db.execute(select(VoiceProfile).where(
+        VoiceProfile.id == profile_id,
+        VoiceProfile.user_id == current_user.id
+    ))
+    profile = result.scalars().first()
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+
+    profile.name = body.name
+    await db.commit()
+    await db.refresh(profile)
+
+    return VoiceProfileResponse.from_orm_with_clone_status(profile)
 
 @router.post("/validate", response_model=VoiceValidationResponse)
 async def validate_voice_audio(

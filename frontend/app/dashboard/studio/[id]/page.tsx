@@ -134,12 +134,14 @@ export default function StudioPage() {
     }, [anyRegenerating]);
 
     const handleGenerateFullAudio = async () => {
+        const token = session?.accessToken;
+        if (!token || !projectId) return;
         setIsGenerating(true);
         try {
             const res = await apiFetch(`/projects/${projectId}/export`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                token: session?.accessToken,
+                token,
             });
             if (!res.ok) {
                 const errorData = await res.json();

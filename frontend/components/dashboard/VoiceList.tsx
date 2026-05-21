@@ -7,24 +7,41 @@ import { Trash2, Mic, Play, Square, Loader2 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import type { VoiceProfile } from '@/types/studio';
 
+interface Campaign {
+    id: string;
+    title: string;
+    segments: { voice_profile_id?: string | null }[];
+}
+
 interface VoiceListProps {
     refreshKey?: number;
 }
 
 export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
     const [profiles, setProfiles] = useState<VoiceProfile[]>([]);
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [playingId, setPlayingId] = useState<string | null>(null);
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState('');
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const editInputRef = useRef<HTMLInputElement | null>(null);
     const { data: session, status } = useSession();
 
     const fetchProfiles = async () => {
         try {
-            const response = await apiFetch('/voice-profiles/', { token: session?.accessToken });
-            if (response.ok) {
-                const data = await response.json();
+            const [profilesRes, campaignsRes] = await Promise.all([
+                apiFetch('/voice-profiles/', { token: session?.accessToken }),
+                apiFetch('/projects', { token: session?.accessToken }),
+            ]);
+            if (profilesRes.ok) {
+                const data = await profilesRes.json();
                 setProfiles(data);
+            }
+            if (campaignsRes.ok) {
+                const data = await campaignsRes.json();
+                setCampaigns(data);
             }
         } catch (error) {
             console.error('Error fetching voice profiles:', error);
@@ -46,6 +63,44 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
         } catch (error) {
             console.error('Error deleting profile:', error);
         }
+    };
+
+    const startEdit = (profile: VoiceProfile) => {
+        setEditingId(profile.id);
+        setEditingName(profile.name);
+        setTimeout(() => editInputRef.current?.select(), 0);
+    };
+
+    const commitEdit = async () => {
+        if (!editingId) return;
+        const trimmed = editingName.trim();
+        const original = profiles.find(p => p.id === editingId)?.name ?? '';
+
+        setEditingId(null);
+
+        if (!trimmed || trimmed === original) return;
+
+        try {
+            const response = await apiFetch(`/voice-profiles/${editingId}`, {
+                method: 'PATCH',
+                token: session?.accessToken,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: trimmed }),
+            });
+            if (response.ok) {
+                const updated: VoiceProfile = await response.json();
+                setProfiles(prev => prev.map(p => p.id === updated.id ? updated : p));
+            } else {
+                console.error('Rename failed:', response.status);
+            }
+        } catch (error) {
+            console.error('Error renaming profile:', error);
+        }
+    };
+
+    const cancelEdit = () => {
+        setEditingId(null);
+        setEditingName('');
     };
 
     const togglePlayback = (profile: VoiceProfile) => {
@@ -76,6 +131,12 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
             audioRef.current = null;
         }
         setPlayingId(null);
+    };
+
+    const getCampaignUsage = (profileId: string): string[] => {
+        return campaigns
+            .filter(c => c.segments.some(s => s.voice_profile_id === profileId))
+            .map(c => c.title);
     };
 
     useEffect(() => {
@@ -111,48 +172,80 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
                 <p className="text-sm text-moore-mid-gray italic">No voice profiles added yet.</p>
             ) : (
                 <div className="grid gap-2">
-                    {profiles.map((profile) => (
-                        <div
-                            key={profile.id}
-                            className="flex items-center justify-between p-3 bg-moore-cream/50 border border-gray-100 rounded-xl hover:bg-moore-cream transition-colors"
-                        >
-                            <div className="flex items-center gap-3">
-                                {profile.has_cloned_voice && profile.preview_url && (
-                                    <button
-                                        onClick={() => togglePlayback(profile)}
-                                        className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
-                                            playingId === profile.id
-                                                ? 'text-moore-red bg-moore-red/10'
-                                                : 'text-moore-mid-gray hover:text-moore-red hover:bg-moore-red/10'
-                                        }`}
-                                    >
-                                        {playingId === profile.id ? (
-                                            <Square className="w-3.5 h-3.5" />
+                    {profiles.map((profile) => {
+                        const usedIn = getCampaignUsage(profile.id);
+                        return (
+                            <div
+                                key={profile.id}
+                                className="flex items-center justify-between p-3 bg-moore-cream/50 border border-gray-100 rounded-xl hover:bg-moore-cream transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    {profile.has_cloned_voice && profile.preview_url && (
+                                        <button
+                                            onClick={() => togglePlayback(profile)}
+                                            className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
+                                                playingId === profile.id
+                                                    ? 'text-moore-red bg-moore-red/10'
+                                                    : 'text-moore-mid-gray hover:text-moore-red hover:bg-moore-red/10'
+                                            }`}
+                                        >
+                                            {playingId === profile.id ? (
+                                                <Square className="w-3.5 h-3.5" />
+                                            ) : (
+                                                <Play className="w-3.5 h-3.5" />
+                                            )}
+                                        </button>
+                                    )}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            {editingId === profile.id ? (
+                                                <input
+                                                    ref={editInputRef}
+                                                    value={editingName}
+                                                    onChange={e => setEditingName(e.target.value)}
+                                                    onBlur={commitEdit}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                                                        if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                                                    }}
+                                                    className="font-medium text-moore-black text-sm bg-white border border-moore-red/40 rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-moore-red/30 w-40"
+                                                />
+                                            ) : (
+                                                <p
+                                                    className="font-medium text-moore-black text-sm cursor-text hover:underline decoration-dotted underline-offset-2"
+                                                    onClick={() => startEdit(profile)}
+                                                    title="Click to rename"
+                                                >
+                                                    {profile.name}
+                                                </p>
+                                            )}
+                                            {profile.has_cloned_voice && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-moore-red/10 text-moore-red border border-moore-red/20 rounded-md">
+                                                    Cloned
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-moore-mid-gray">{profile.base_model}</p>
+                                        {usedIn.length > 0 ? (
+                                            <p className="text-[11px] text-moore-mid-gray mt-0.5">
+                                                Used in: {usedIn.join(', ')}
+                                            </p>
                                         ) : (
-                                            <Play className="w-3.5 h-3.5" />
-                                        )}
-                                    </button>
-                                )}
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-medium text-moore-black text-sm">{profile.name}</p>
-                                        {profile.has_cloned_voice && (
-                                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-moore-red/10 text-moore-red border border-moore-red/20 rounded-md">
-                                                Cloned
+                                            <span className="inline-block mt-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-400 rounded">
+                                                Unused
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-moore-mid-gray">{profile.base_model}</p>
                                 </div>
+                                <button
+                                    onClick={() => setConfirmDeleteId(profile.id)}
+                                    className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => setConfirmDeleteId(profile.id)}
-                                className="h-8 w-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

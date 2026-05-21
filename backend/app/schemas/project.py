@@ -56,6 +56,10 @@ class SegmentAddRequest(BaseModel):
     emotion: Optional[str] = None
 
 
+class SegmentReorderBody(BaseModel):
+    segment_ids: List[UUID]
+
+
 class SegmentRewriteRequest(BaseModel):
     text: str
     prompt: str
