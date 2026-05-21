@@ -8,6 +8,7 @@ import { Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface VoiceUploadProps {
     onUploadSuccess?: () => void;
+    bare?: boolean;
 }
 
 interface ValidationResult {
@@ -17,7 +18,7 @@ interface ValidationResult {
     errors: string[];
 }
 
-export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => {
+export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess, bare }) => {
     const [hasConsented, setHasConsented] = useState(false);
     const [name, setName] = useState('');
     const [referenceText, setReferenceText] = useState('');
@@ -113,12 +114,7 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
         }
     };
 
-    return (
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
-            <h2 className="text-lg font-semibold text-moore-black tracking-tight">
-                Add Voice Profile
-            </h2>
-
+    const form = (
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
                     <p className="text-xs text-amber-800 leading-relaxed">
@@ -233,6 +229,16 @@ export const VoiceUpload: React.FC<VoiceUploadProps> = ({ onUploadSuccess }) => 
                     </p>
                 )}
             </form>
+    );
+
+    if (bare) return form;
+
+    return (
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+            <h2 className="text-lg font-semibold text-moore-black tracking-tight">
+                Add Voice Profile
+            </h2>
+            {form}
         </div>
     );
 };

@@ -5,6 +5,7 @@ import { CreateCampaignModal } from "@/components/dashboard/create-campaign-moda
 import { CampaignList } from "@/components/dashboard/CampaignList"
 import { VoiceUpload } from "@/components/dashboard/VoiceUpload"
 import { VoiceList } from "@/components/dashboard/VoiceList"
+import { Modal } from "@/components/ui/modal"
 import { useSession, signOut } from "next-auth/react"
 import Link from "next/link"
 
@@ -13,6 +14,7 @@ export default function DashboardPage() {
     const [voiceRefreshKey, setVoiceRefreshKey] = React.useState(0)
     const [campaignRefreshKey, setCampaignRefreshKey] = React.useState(0)
     const [hasCampaigns, setHasCampaigns] = React.useState<boolean | null>(null)
+    const [showUploadForm, setShowUploadForm] = React.useState(false)
     const { data: session } = useSession()
 
     const handleCampaignCreated = () => {
@@ -91,9 +93,11 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Voice Profiles Sidebar */}
-                    <div className="space-y-6">
-                        <VoiceUpload onUploadSuccess={() => setVoiceRefreshKey(k => k + 1)} />
-                        <VoiceList refreshKey={voiceRefreshKey} />
+                    <div className="space-y-4">
+                        <VoiceList
+                            refreshKey={voiceRefreshKey}
+                            onAddClick={() => setShowUploadForm(true)}
+                        />
                     </div>
                 </div>
             </main>
@@ -105,6 +109,20 @@ export default function DashboardPage() {
                     handleCampaignCreated()
                 }}
             />
+
+            <Modal
+                isOpen={showUploadForm}
+                onClose={() => setShowUploadForm(false)}
+                title="Add Voice Profile"
+            >
+                <VoiceUpload
+                    bare
+                    onUploadSuccess={() => {
+                        setVoiceRefreshKey(k => k + 1)
+                        setShowUploadForm(false)
+                    }}
+                />
+            </Modal>
         </div>
     )
 }

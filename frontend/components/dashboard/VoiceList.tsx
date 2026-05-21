@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { API_URL } from '@/lib/config';
 import { apiFetch } from '@/lib/api';
-import { Trash2, Mic, Play, Square, Loader2 } from 'lucide-react';
+import { Trash2, Mic, Play, Square, Loader2, Plus } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import type { VoiceProfile } from '@/types/studio';
 
@@ -15,9 +15,10 @@ interface Campaign {
 
 interface VoiceListProps {
     refreshKey?: number;
+    onAddClick?: () => void;
 }
 
-export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
+export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey, onAddClick }) => {
     const [profiles, setProfiles] = useState<VoiceProfile[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -164,10 +165,21 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey }) => {
 
     return (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-moore-black tracking-tight flex items-center gap-2">
-                <Mic className="w-5 h-5 text-moore-red" />
-                Your Voice Profiles
-            </h3>
+            <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-moore-black tracking-tight flex items-center gap-2">
+                    <Mic className="w-5 h-5 text-moore-red" />
+                    Your Voice Profiles
+                </h3>
+                {onAddClick && (
+                    <button
+                        onClick={onAddClick}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-moore-mid-gray border border-gray-200 hover:text-moore-red hover:border-moore-red transition-colors"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add
+                    </button>
+                )}
+            </div>
             {profiles.length === 0 ? (
                 <p className="text-sm text-moore-mid-gray italic">No voice profiles added yet.</p>
             ) : (
