@@ -29,7 +29,7 @@ class TTSService:
 
     def __init__(self, mode: str = "mock"):
         self.mode = mode
-        self.output_dir = os.path.join(os.getcwd(), "static", "audio")
+        self.output_dir = settings.STATIC_AUDIO_DIR or os.path.join(os.getcwd(), "static", "audio")
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.preset_model = None   # CustomVoice model for preset speakers
