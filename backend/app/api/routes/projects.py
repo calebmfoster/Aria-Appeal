@@ -375,8 +375,8 @@ async def export_project(
     master_audio_url = f"/static/audio/{mastered_filename}"
     
     project.status = ProjectStatus.MASTERED
-    await db.commit()
-    
+    await _recalculate_segment_timestamps(db, project)
+
     return {"message": "Project exported successfully", "master_audio_url": master_audio_url}
 
 
@@ -387,9 +387,14 @@ async def reorder_segments(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    stmt = select(Project).where(Project.id == project_id, Project.user_id == current_user.id)
+    stmt = (
+        select(Project)
+        .where(Project.id == project_id, Project.user_id == current_user.id)
+        .options(selectinload(Project.segments))
+    )
     result = await db.execute(stmt)
-    if not result.scalars().first():
+    project = result.scalars().first()
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
     for i, segment_id in enumerate(body.segment_ids):
@@ -402,7 +407,7 @@ async def reorder_segments(
         if segment:
             segment.sequence_order = i
 
-    await db.commit()
+    await _recalculate_segment_timestamps(db, project)
     return {"message": "Segments reordered"}
 
 
@@ -472,6 +477,13 @@ async def add_segment(
     db.add(new_segment)
     await db.commit()
     await db.refresh(new_segment)
+
+    stmt2 = select(Project).where(Project.id == project_id).options(selectinload(Project.segments))
+    result2 = await db.execute(stmt2)
+    project2 = result2.scalars().first()
+    if project2:
+        await _recalculate_segment_timestamps(db, project2)
+
     return new_segment
 
 
@@ -517,6 +529,13 @@ async def delete_segment(
         seg.sequence_order -= 1
 
     await db.commit()
+
+    stmt2 = select(Project).where(Project.id == project_id).options(selectinload(Project.segments))
+    result2 = await db.execute(stmt2)
+    project2 = result2.scalars().first()
+    if project2:
+        await _recalculate_segment_timestamps(db, project2)
+
     return {"message": "Segment deleted"}
 
 
