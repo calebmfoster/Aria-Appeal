@@ -1,7 +1,7 @@
 # Aria Appeal — Product Roadmap
 
 **Created**: 2026-03-27
-**Last Updated**: 2026-03-27
+**Last Updated**: 2026-06-26
 
 This document defines the gap between the current PoC and a polished, demo-ready product. Organized into priority tiers with the goal of making each tier independently demoable.
 
@@ -20,18 +20,29 @@ This document defines the gap between the current PoC and a polished, demo-ready
 - Auto re-export after regeneration
 - Moore brand applied throughout
 
-## Current State (Broken or Missing)
+## Tier Status (as of 2026-06-26)
 
-- No campaign list on dashboard (dead end after leaving studio)
-- Export button doesn't download anything
-- Script edits are local-only (lost on refresh)
-- No dirty/unsaved indicator
-- No project name anywhere
-- No forgot password
-- No delete confirmations
-- Waveform has no time display, zoom, or volume
-- No keyboard shortcuts
-- PyTorch is CPU-only despite RTX 4080 Super being available
+**Tier 1 (Must-Have for Demo) — ✅ Complete.** Campaign list, download, auto-save, dirty
+indicator, GPU acceleration, and project name all shipped (Phase X Sessions 4–5).
+
+**Tier 2 (Makes the Demo Impressive) — ✅ Complete.** Prompt-based segment editing,
+custom-script option, emotion directive UX, keyboard shortcuts, waveform time display, and
+delete confirmations all shipped (Phase X Session 5).
+
+**Tier 3 (Production Polish) — 🚧 Partial.** Done: inline text editing, segment management
+(add / delete / drag-to-reorder), waveform controls (zoom / volume / skip), session-timeout
+handling. Not yet done: per-segment mini waveforms, segment split, forgot-password flow,
+auto-login after registration, CSRF/JWT hardening, polling safeguards, mobile responsive.
+
+**Tier 4 (Enterprise / Scale) — Future**, unchanged.
+
+## Remaining Gaps
+
+- No forgot-password / account recovery flow
+- No per-segment mini waveforms or segment split
+- `ffmpeg`/`ffprobe` not installed — audio is WAV-only (becomes a hard requirement for video; see Tier V)
+- Local file storage only (no S3/CDN)
+- Audio cohesion: "Regenerate All" bypasses arc-continuity chaining (see `Open_Issues.md`)
 
 ---
 
@@ -210,6 +221,33 @@ These make it feel like a real product, not a prototype.
 - Webhook on campaign completion
 - API access for programmatic campaign generation
 - CRM integration (import donor segments, personalize scripts)
+
+---
+
+## Tier V — Video Previsualization (New Direction, In Design)
+
+> Added 2026-06-26 after client-meeting feedback. **Goal:** generate a moving
+> *previsualization / animatic* of the appeal — better than storyboards or stills for
+> pitching clients on how the ad will look and feel. Output is a pitch artifact, not a
+> finished ad; if the client buys in, they shoot it for real. Full design lives in the
+> forthcoming spec under `docs/superpowers/specs/`.
+
+**Phase 1 — Vertical demo slice ("Animatic assembler"):**
+- LLM campaign generation extended to produce, alongside the spoken script: a per-segment
+  video prompt + a campaign-level visual bible (style + reusable character sheet).
+- `VideoProvider` abstraction (mirrors the existing TTS/LLM provider-toggle pattern):
+  `asset` (pre-generated clips), `generated` (live Google Veo via Gemini API), and a future
+  `LocalVideoProvider` for company hardware.
+- Subject consistency via tail-frame chaining (last frame of clip N → init image for N+1)
+  plus character-sheet conditioning. "Good, not perfect" — acceptable for previs.
+- Studio gains an **Audio | Video** tabbed editor. Minimal editing: reorder, replace
+  clip, trim, subtitle toggle. Subtitles derive from existing segment text + timing.
+- ffmpeg assembly pipeline: video track + master narration + burned-in captions → MP4.
+- **Prerequisite:** install `ffmpeg`/`ffprobe` (currently missing — see Remaining Gaps).
+
+**Phase 2 — Full independent-track NLE:** free drag/place/trim of clips and audio on
+separate tracks, decoupled from segment boundaries. Data model is built forward-compatible
+in Phase 1 so this relaxes constraints rather than migrating data.
 
 ---
 
