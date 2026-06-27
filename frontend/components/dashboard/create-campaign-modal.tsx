@@ -14,6 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import type { VoiceProfile } from "@/types/studio"
 
 interface CreateCampaignModalProps {
     isOpen: boolean
@@ -26,12 +27,22 @@ const STEPS = [
     "Opening studio..."
 ]
 
+// Mirrors the studio's preset speakers (InspectorPanel). Only Aiden and Ryan are
+// native-English Qwen3-TTS presets; the rest sound off reading English. A campaign
+// generates all segments in one voice; cohesion comes from the chained generation.
+const PRESET_SPEAKERS = [
+    { value: 'Aiden', label: 'Aiden — Male (English)' },
+    { value: 'Ryan',  label: 'Ryan — Male (English)' },
+]
+
 export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProps) {
     const { data: session } = useSession();
     const [loading, setLoading] = React.useState(false)
     const [step, setStep] = React.useState(0)
     const [mode, setMode] = React.useState<'ai' | 'custom'>('ai')
     const [showAdvanced, setShowAdvanced] = React.useState(false)
+    const [voiceProfiles, setVoiceProfiles] = React.useState<VoiceProfile[]>([])
+    const [selectedVoice, setSelectedVoice] = React.useState('default')
     const [formData, setFormData] = React.useState({
         target_audience: "",
         cause: "",
@@ -43,6 +54,15 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
         messaging_strategy: "",
         ask_amount: "",
     })
+
+    // Load the user's cloned voices so they can be picked at creation time
+    React.useEffect(() => {
+        if (!isOpen || !session?.accessToken) return
+        apiFetch('/voice-profiles/', { token: session.accessToken })
+            .then(r => (r.ok ? r.json() : []))
+            .then((data: VoiceProfile[]) => setVoiceProfiles(Array.isArray(data) ? data : []))
+            .catch(() => setVoiceProfiles([]))
+    }, [isOpen, session?.accessToken])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -71,6 +91,15 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                 if (formData.story_hook.trim()) payload.story_hook = formData.story_hook.trim();
                 if (formData.messaging_strategy) payload.messaging_strategy = formData.messaging_strategy;
                 if (formData.ask_amount.trim()) payload.ask_amount = formData.ask_amount.trim();
+            }
+
+            // Voice applies to every segment. 'default' → leave unset (backend defaults to Aiden).
+            if (selectedVoice && selectedVoice !== 'default') {
+                if (PRESET_SPEAKERS.some(p => p.value === selectedVoice)) {
+                    payload.speaker_preset = selectedVoice;
+                } else {
+                    payload.voice_profile_id = selectedVoice;
+                }
             }
 
             const res = await apiFetch('/projects', {
@@ -183,6 +212,33 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                         onChange={handleChange}
                         className="rounded-xl border-gray-200 focus:ring-2 focus:ring-moore-red/30 focus:border-moore-red"
                     />
+                </div>
+
+                {/* Voice — applied to every segment; cohesion comes from chained generation */}
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-moore-dark-gray">Voice</label>
+                    <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-moore-red/30">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default">Default / Auto (Aiden)</SelectItem>
+                            {PRESET_SPEAKERS.map(p => (
+                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                            ))}
+                            {voiceProfiles.length > 0 && (
+                                <div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-moore-mid-gray">
+                                    Cloned voices
+                                </div>
+                            )}
+                            {voiceProfiles.map(vp => (
+                                <SelectItem key={vp.id} value={vp.id}>{vp.name} (cloned)</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-moore-mid-gray">
+                        Applied to every segment. Cloned voices carry tone across segments best.
+                    </p>
                 </div>
 
                 {/* Advanced / More Context section (AI mode only) */}

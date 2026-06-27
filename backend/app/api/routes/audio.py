@@ -119,17 +119,23 @@ from app.schemas.audio import RegenerateRequest
 
 async def _run_regenerate_sync(
     task_id: str, original_file_url: str, text: str, start_ms: int, end_ms: int,
-    voice_profile_id: str, emotion: str, segment_id: str
+    voice_profile_id: str, emotion: str, segment_id: str, speaker_preset: str = None
 ):
     try:
         task_statuses[task_id] = {"status": "RUNNING"}
 
         logger.info(f"[Regenerate {task_id}] Text: '{text[:80]}...'")
-        logger.info(f"[Regenerate {task_id}] Emotion: '{emotion}' | Voice: '{voice_profile_id}'")
+        logger.info(f"[Regenerate {task_id}] Emotion: '{emotion}' | Preset: '{speaker_preset}' | Voice: '{voice_profile_id}'")
 
         import app.worker as worker_module
 
-        speaker_name, ref_audio_path, ref_text = await _resolve_voice_profile(voice_profile_id)
+        # Preset speaker takes priority over a cloned voice profile (mirrors the
+        # initial-generation path in projects.py). A preset is a plain speaker name,
+        # not a UUID, so it has no reference audio.
+        if speaker_preset:
+            speaker_name, ref_audio_path, ref_text = speaker_preset, None, None
+        else:
+            speaker_name, ref_audio_path, ref_text = await _resolve_voice_profile(voice_profile_id)
 
         result = await asyncer.asyncify(worker_module.regenerate_audio_task)(
             master_file_url=original_file_url,
@@ -183,8 +189,11 @@ async def regenerate_segment(
         if seg:
             seg.text = request.text
             seg.emotion = request.emotion
-            if request.voice_profile_id:
-                seg.voice_profile_id = request.voice_profile_id
+            # voice_profile_id (cloned) and speaker_preset are mutually exclusive in
+            # the UI; persist exactly what the request carries so the segment reflects
+            # the chosen voice.
+            seg.voice_profile_id = request.voice_profile_id or None
+            seg.speaker_preset = request.speaker_preset or None
             await db.commit()
 
         task_id = str(uuid.uuid4())
@@ -193,7 +202,7 @@ async def regenerate_segment(
         background_tasks.add_task(
             _run_regenerate_sync,
             task_id, request.original_file_url, request.text, request.start_ms, request.end_ms,
-            request.voice_profile_id, request.emotion, request.sentence_id
+            request.voice_profile_id, request.emotion, request.sentence_id, request.speaker_preset
         )
         return AudioGenerationResponse(task_id=task_id, status="PENDING")
     except Exception as e:
