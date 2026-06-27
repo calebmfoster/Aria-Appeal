@@ -112,11 +112,22 @@ const WaveformVisualizer: React.FC = () => {
 
         return () => {
             destroyed = true;
+            // Explicitly halt playback before teardown. Leaving the studio (or a
+            // strict-mode remount) must stop audio even if destroy() throws, since
+            // the WebAudio backend can otherwise keep the buffer playing.
+            try {
+                ws.stop();
+            } catch {
+                // Ignore — playback may already be stopped
+            }
             try {
                 ws.destroy();
             } catch {
                 // Ignore AbortError during React strict mode double-mount cleanup
             }
+            // isPlaying lives in the global store and survives navigation; reset it
+            // so the next mount doesn't auto-resume.
+            useStudioStore.getState().setIsPlaying(false);
         };
     }, []);
 
