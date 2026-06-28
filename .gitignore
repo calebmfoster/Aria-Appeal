@@ -27,6 +27,8 @@ frontend/.env.local
 /static/voice_uploads/
 backend/static/audio/
 backend/static/voice_uploads/
+/static/video/
+backend/static/video/
 
 # Local infra
 backend/Redis/
