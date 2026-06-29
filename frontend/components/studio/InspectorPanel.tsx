@@ -18,13 +18,12 @@ import {
 } from "@/components/ui/select";
 import type { VoiceProfile } from '@/types/studio';
 
+// Only Aiden and Ryan are native-English Qwen3-TTS presets; the other 7 are
+// Chinese/Japanese/Korean-native and sound off reading English. For more English
+// voices (esp. female — there is no English female preset), use cloned voices.
 const PRESET_SPEAKERS = [
-    { value: 'Aiden',  label: 'Aiden — Male (default)' },
-    { value: 'Serena', label: 'Serena — Female' },
-    { value: 'Vivian', label: 'Vivian — Female' },
-    { value: 'Ryan',   label: 'Ryan — Male' },
-    { value: 'Dylan',  label: 'Dylan — Male' },
-    { value: 'Sohee',  label: 'Sohee — Female' },
+    { value: 'Aiden', label: 'Aiden — Male (English)' },
+    { value: 'Ryan',  label: 'Ryan — Male (English)' },
 ];
 
 function VoiceTabToggle({ tab, onChange }: { tab: 'preset' | 'cloned'; onChange: (t: 'preset' | 'cloned') => void }) {
@@ -233,7 +232,7 @@ const InspectorPanel: React.FC = () => {
 
             console.log('[Regenerate] Sending text:', latestSegment.text.substring(0, 60), '...');
             console.log('[Regenerate] Emotion:', latestSegment.emotion);
-            console.log('[Regenerate] Voice:', latestSegment.voice_profile_id);
+            console.log('[Regenerate] Voice:', latestSegment.voice_profile_id, '| Preset:', latestSegment.speaker_preset);
 
             const response = await apiFetch('/regenerate-segment', {
                 method: 'POST',
@@ -246,7 +245,8 @@ const InspectorPanel: React.FC = () => {
                     end_ms: latestSegment.end_ms,
                     original_file_url: null,
                     emotion: latestSegment.emotion || '',
-                    voice_profile_id: latestSegment.voice_profile_id || null
+                    voice_profile_id: latestSegment.voice_profile_id || null,
+                    speaker_preset: latestSegment.speaker_preset || null
                 }),
             });
 
@@ -315,7 +315,8 @@ const InspectorPanel: React.FC = () => {
                         end_ms: seg.end_ms,
                         original_file_url: null,
                         emotion: seg.emotion || '',
-                        voice_profile_id: seg.voice_profile_id || null
+                        voice_profile_id: seg.voice_profile_id || null,
+                        speaker_preset: seg.speaker_preset || null
                     }),
                 });
 

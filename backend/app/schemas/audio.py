@@ -18,4 +18,5 @@ class RegenerateRequest(BaseModel):
     end_ms: int
     original_file_url: Optional[str] = None
     voice_profile_id: Optional[str] = None
+    speaker_preset: Optional[str] = None
     emotion: Optional[str] = None
