@@ -48,6 +48,10 @@ class ProjectCreate(BaseModel):
     script_length: Optional[Literal["30s", "60s", "90s"]] = "30s"
     messaging_strategy: Optional[Literal["urgency", "hope", "gratitude", "empowerment"]] = None
     ask_amount: Optional[str] = None
+    # Initial voice applied to all segments. Mutually exclusive: a cloned-voice
+    # UUID OR a preset speaker name. Both None → chained generation defaults to Aiden.
+    voice_profile_id: Optional[str] = None
+    speaker_preset: Optional[str] = None
 
 
 class SegmentAddRequest(BaseModel):

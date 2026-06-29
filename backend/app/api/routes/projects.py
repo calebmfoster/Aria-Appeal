@@ -94,11 +94,13 @@ async def _generate_baseline_audio_for_project(project_id: uuid.UUID):
                                 ref_audio_path = profile.reference_audio_path
                                 ref_text = profile.reference_text
 
-                    # Per-segment emotion; fall back to project-level
+                    # Per-segment emotion; fall back to project-level.
+                    # NOTE: previously prepended "continuing the emotional arc, " for
+                    # preset segments after the first. Removed 2026-06-17 — each clip is
+                    # synthesized statelessly (no knowledge of neighbors), so that phrase
+                    # was meaningless to the model and risked polluting/leaking into the
+                    # instruct. Pass the clean per-segment direction instead.
                     emotion = segment.emotion or project_emotion
-                    # For preset-speaker segments after the first, hint continuity via instruct
-                    if i > 0 and emotion and not is_clone_path:
-                        emotion = f"continuing the emotional arc, {emotion}"
 
                     pitch = segment.pitch_shift or 0.0
 
@@ -204,7 +206,8 @@ async def create_project(
             await db.rollback()
             raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
 
-    # 3. Create Script Segments
+    # 3. Create Script Segments — stamp the chosen voice on every segment so the
+    # chained baseline generation produces cohesive audio in that voice.
     for i, item in enumerate(segment_texts):
         text, emotion = item if isinstance(item, tuple) else (item, None)
         segment = ScriptSegment(
@@ -212,6 +215,8 @@ async def create_project(
             text=text,
             emotion=emotion,
             sequence_order=i,
+            voice_profile_id=project_in.voice_profile_id or None,
+            speaker_preset=project_in.speaker_preset or None,
         )
         db.add(segment)
     

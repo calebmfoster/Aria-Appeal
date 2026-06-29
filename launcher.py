@@ -4,6 +4,7 @@ import sys
 import subprocess
 import threading
 import shutil
+import socket
 import urllib.request
 from pathlib import Path
 import tkinter as tk
@@ -60,6 +61,14 @@ LOCAL_MODELS = [
     ("Qwen2.5-3B  (float16, ~6 GB VRAM)", "Qwen/Qwen2.5-3B-Instruct"),
 ]
 
+# Network modes: (display label, config value). start_all maps the value to the
+# host the frontend's NEXT_PUBLIC_API_URL / NEXTAUTH_URL bind to.
+NETWORK_MODES = [
+    ("Localhost", "localhost"),
+    ("Home network", "home"),
+    # Future: ("Tailscale", "tailscale"), ("Public (internet)", "public")
+]
+
 DEFAULT_CONFIG = {
     "llm_provider": "claude",
     "claude_model": "claude-haiku-4-5",
@@ -67,6 +76,7 @@ DEFAULT_CONFIG = {
     "llm_model_id": "Qwen/Qwen3-8B",
     "tts_provider": "qwen3-local",
     "tts_model": "qwen3-tts",
+    "network_mode": "localhost",
 }
 
 
@@ -100,6 +110,11 @@ class LauncherApp(tk.Tk):
 
         self._worktrees = self._detect_worktrees()
         self._source_var = tk.StringVar(value=self._worktrees[0][0])
+
+        saved_mode = self._cfg.get("network_mode", "localhost")
+        mode_label = next((lbl for lbl, val in NETWORK_MODES if val == saved_mode),
+                          NETWORK_MODES[0][0])
+        self._net_mode_var = tk.StringVar(value=mode_label)
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -160,6 +175,113 @@ class LauncherApp(tk.Tk):
                 return frontend, backend, uvicorn
         return FRONTEND_DIR, BACKEND_DIR, VENV_UVICORN
 
+    # ── Network mode ─────────────────────────────────────────────────────────
+
+    def _net_value(self) -> str:
+        label = self._net_mode_var.get()
+        for lbl, val in NETWORK_MODES:
+            if lbl == label:
+                return val
+        return "localhost"
+
+    def _on_network_change(self, *_):
+        self._cfg["network_mode"] = self._net_value()
+        _save_config(self._cfg)
+        if any(self._procs.get(n) for n in ("backend", "frontend")):
+            self._append_log(
+                "[launcher] Network mode changes take effect on next Start "
+                "(Stop All, then Start All).\n"
+            )
+
+    @staticmethod
+    def _is_cgnat(ip: str) -> bool:
+        """True for the 100.64.0.0/10 CGNAT range Tailscale hands out."""
+        parts = ip.split(".")
+        try:
+            return parts[0] == "100" and 64 <= int(parts[1]) <= 127
+        except (IndexError, ValueError):
+            return False
+
+    def _detect_lan_ip(self) -> str | None:
+        """Best-effort private LAN IPv4, skipping VPN/Tailscale/link-local NICs."""
+        skip_names = (
+            "tailscale", "nord", "vpn", "openvpn", "wireguard", "zerotier",
+            "loopback", "bluetooth", "vethernet", "vmware", "virtualbox",
+            "hyper-v", "hyperv", "wsl", "docker",
+        )
+
+        def rank(ip: str) -> int:
+            if ip.startswith("192.168."):
+                return 0
+            if ip.startswith("172."):
+                try:
+                    if 16 <= int(ip.split(".")[1]) <= 31:
+                        return 1
+                except (IndexError, ValueError):
+                    pass
+            if ip.startswith("10."):
+                return 2
+            return 9
+
+        candidates: list[tuple[int, str]] = []
+
+        if HAS_PSUTIL:
+            try:
+                stats = psutil.net_if_stats()
+                for nic, addrs in psutil.net_if_addrs().items():
+                    if any(s in nic.lower() for s in skip_names):
+                        continue
+                    st = stats.get(nic)
+                    if st is not None and not st.isup:
+                        continue
+                    for a in addrs:
+                        if a.family != socket.AF_INET:
+                            continue
+                        ip = a.address
+                        if ip.startswith("127.") or ip.startswith("169.254."):
+                            continue
+                        if self._is_cgnat(ip):
+                            continue
+                        candidates.append((rank(ip), ip))
+            except Exception:
+                pass
+
+        if not candidates:
+            # No psutil / nothing found — enumerate host IPs (no adapter names).
+            try:
+                for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+                    if ip.startswith("127.") or ip.startswith("169.254."):
+                        continue
+                    if self._is_cgnat(ip):
+                        continue
+                    candidates.append((rank(ip), ip))
+            except Exception:
+                pass
+
+        if not candidates:
+            # Last resort: ask the OS which local IP routes outbound.
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    s.connect(("8.8.8.8", 80))
+                    ip = s.getsockname()[0]
+                    if not self._is_cgnat(ip) and not ip.startswith("169.254."):
+                        candidates.append((rank(ip), ip))
+                finally:
+                    s.close()
+            except Exception:
+                pass
+
+        if not candidates:
+            return None
+        candidates.sort(key=lambda t: t[0])
+        return candidates[0][1]
+
+    def _update_url_labels(self, urls: dict[str, str]):
+        for name, url in urls.items():
+            if name in self._url_labels:
+                self._url_labels[name].configure(text=url)
+
     # ── UI construction ──────────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -189,6 +311,19 @@ class LauncherApp(tk.Tk):
                                  activebackground=BTN_ACTIVE, activeforeground=FG)
             om.pack(side="left")
 
+        # Network mode selector (always visible)
+        tk.Label(header, text="Network:", font=self._small_font,
+                 bg=BG, fg="#9ca3af").pack(side="left", padx=(20, 4))
+        net_names = [lbl for lbl, _ in NETWORK_MODES]
+        net_om = tk.OptionMenu(header, self._net_mode_var, *net_names,
+                               command=self._on_network_change)
+        net_om.configure(bg=BTN_BG, fg=FG, activebackground=BTN_ACTIVE,
+                         font=self._small_font, relief="flat", padx=6, pady=2, bd=0,
+                         highlightthickness=0)
+        net_om["menu"].configure(bg=BTN_BG, fg=FG, font=self._small_font,
+                                 activebackground=BTN_ACTIVE, activeforeground=FG)
+        net_om.pack(side="left")
+
         self._settings_btn = tk.Button(
             header, text="⚙  Settings", font=self._small_font,
             bg=BTN_BG, fg="#9ca3af", activebackground=BTN_ACTIVE, activeforeground=FG,
@@ -204,6 +339,7 @@ class LauncherApp(tk.Tk):
         _urls = {"backend": "http://localhost:8000", "frontend": "http://localhost:3000"}
 
         self._dots: dict[str, tk.Canvas] = {}
+        self._url_labels: dict[str, tk.Label] = {}
         for name in ("backend", "frontend"):
             c = tk.Canvas(status_frame, width=12, height=12, bg=BG, highlightthickness=0)
             c.create_oval(2, 2, 10, 10, fill=STATUS_COLORS["stopped"], outline="", tags="dot")
@@ -212,9 +348,11 @@ class LauncherApp(tk.Tk):
 
             tk.Label(status_frame, text=name.capitalize(),
                      font=self._label_font, bg=BG, fg=FG).pack(side="left", padx=(0, 4))
-            tk.Label(status_frame, text=_urls[name],
-                     font=tkfont.Font(family="Consolas", size=9),
-                     bg=BG, fg="#6b7280").pack(side="left", padx=(0, 20))
+            url_lbl = tk.Label(status_frame, text=_urls[name],
+                               font=tkfont.Font(family="Consolas", size=9),
+                               bg=BG, fg="#6b7280")
+            url_lbl.pack(side="left", padx=(0, 20))
+            self._url_labels[name] = url_lbl
 
         # Buttons
         btn_frame = tk.Frame(self, bg=BG)
@@ -458,6 +596,35 @@ class LauncherApp(tk.Tk):
             missing_be = [k for k in ("DATABASE_URL",) if k not in backend_env]
             if missing_be:
                 self._append_log(f"[launcher] Warning: {', '.join(missing_be)} not found in main .env\n")
+
+        # ── Network mode: bind the frontend's API/auth URLs to the chosen host ──
+        # Process-env vars take precedence over .env.local in Next.js, so this
+        # overrides whatever .env.local says and reverts when the mode changes.
+        mode = self._net_value()
+        net_urls = {"backend": "http://localhost:8000", "frontend": "http://localhost:3000"}
+        if mode == "home":
+            lan_ip = self._detect_lan_ip()
+            if lan_ip:
+                frontend_env["NEXT_PUBLIC_API_URL"] = f"http://{lan_ip}:8000"
+                frontend_env["NEXT_INTERNAL_API_URL"] = "http://127.0.0.1:8000"
+                frontend_env["NEXTAUTH_URL"] = f"http://{lan_ip}:3000"
+                net_urls = {"backend": f"http://{lan_ip}:8000",
+                            "frontend": f"http://{lan_ip}:3000"}
+                self._append_log(
+                    f"[launcher] Network: Home — open  http://{lan_ip}:3000  "
+                    f"from any device on your home Wi-Fi/LAN.\n"
+                )
+            else:
+                self._append_log(
+                    "[launcher] Network: Home requested but no LAN IP found — "
+                    "using localhost.\n"
+                )
+                mode = "localhost"
+        if mode == "localhost":
+            frontend_env["NEXT_PUBLIC_API_URL"] = "http://127.0.0.1:8000"
+            frontend_env["NEXT_INTERNAL_API_URL"] = "http://127.0.0.1:8000"
+            frontend_env["NEXTAUTH_URL"] = "http://localhost:3000"
+        self._update_url_labels(net_urls)
 
         npm = shutil.which("npm")
         if not npm:

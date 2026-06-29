@@ -1,7 +1,31 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-05-21
-**Phase**: Phase X — Session 10 Complete
+**Date**: 2026-06-26
+**Phase**: Phase X — Session 11 complete; Video Previsualization in design
+
+> Note: entries below are newest-first at the top of each phase but the file as a whole is
+> not strictly chronological. Session 11 (2026-06-08) is recorded lower down. Some interim
+> work (launcher worktree-source dropdown, Add-Voice-Profile modal) lives in git history and
+> `CLAUDE.md` but was never written up here.
+
+## Session 12 (2026-06-26) — Client Feedback + Video Previsualization Design
+
+### Studio — Playback Stop on Navigation (Bug Fix)
+- `WaveformVisualizer.tsx`: audio kept playing after leaving the studio. The init-effect
+  teardown now explicitly `ws.stop()`s before `ws.destroy()` and resets the global
+  `isPlaying` flag (it lives in the Zustand store and survives navigation, which also
+  prevented auto-resume on the next mount).
+
+### Video Previsualization — Design Kickoff
+- Client meeting feedback: strong reception; main ask was a "next phase" video capability —
+  generate a video for the appeal plus a studio editor to tweak it (drag clips, subtitles).
+- Reframed as a **previsualization / animatic** tool (beats storyboards for pitching), not
+  ad production. Brainstormed scope: vertical demo slice first (see `Product_Roadmap.md`
+  Tier V). Design spec being authored under `docs/superpowers/specs/`.
+- Decisions locked: Google Veo via Gemini API (pre-gen clips + one live); `VideoProvider`
+  abstraction with future local provider; Audio|Video tabbed studio; ffmpeg assembly;
+  tail-frame chaining + character sheet for subject consistency; generation extended to
+  emit per-segment video prompts + a campaign visual bible.
 
 ## Session 10 (2026-05-21)
 
@@ -294,3 +318,13 @@
 - [x] **Audio Cohesion — Clone Chain Improved**: Bumped `_extract_audio_tail()` reference tail from 2.0 s to 3.0 s in `projects.py` for more prosodic context on clone-path campaigns.
 - [x] **NextAuth Type Safety**: Created `frontend/types/next-auth.d.ts` augmenting `Session` with `accessToken?: string` and `user.id?: string`. Removed all 6 `(session as any)?.accessToken` casts across `InspectorPanel.tsx`, `create-campaign-modal.tsx`, `VoiceList.tsx`, `CampaignList.tsx`, `VoiceUpload.tsx`, `studio/[id]/page.tsx`. TypeScript build passes clean.
 - [x] **Session Timeout / 401 Handling**: Created `frontend/lib/api.ts` with `apiFetch()` wrapper that fires `aria:unauthorized` CustomEvent on 401. Created `frontend/components/auth/SessionExpiredModal.tsx` that listens for the event and shows a re-login dialog preserving current route. Mounted in new `frontend/app/dashboard/layout.tsx`.
+
+### ✅ Phase X (Session 11): Launcher Network Modes — LAN / Home Access (Completed 2026-06-08)
+
+> Note: Sessions 9–10 (worktree-source dropdown, Add-Voice-Profile modal) are in CLAUDE.md and git history but were never written up in this doc.
+
+- [x] **Network mode selector**: Header dropdown in `launcher.py` (`Localhost` / `Home network`), structured via a `NETWORK_MODES` list so `Tailscale` / `Public` drop in later. Choice persists in `config.json` (`network_mode`).
+- [x] **Per-mode URL binding**: On Start All, the selected mode injects `NEXT_PUBLIC_API_URL` + `NEXTAUTH_URL` for the chosen host into the frontend subprocess; `NEXT_INTERNAL_API_URL` stays on `127.0.0.1` for fast SSR/auth. Process-env overrides `.env.local` in Next.js, so there's no file churn and it auto-reverts on mode change. `Localhost` mode also overrides the (currently Tailscale-pinned) `.env.local`, fixing off-Tailscale localhost.
+- [x] **LAN IP auto-detection**: `_detect_lan_ip()` enumerates NICs via psutil, skipping VPN/Tailscale/link-local/virtual adapters and the 100.64.0.0/10 CGNAT range, preferring 192.168 → 172.16–31 → 10. Re-runs every Start so DHCP changes are handled (no hardcoded IP). Verified → `192.168.0.48`.
+- [x] **Live URL feedback**: Status row URLs update to the active host and the launcher logs the open-this address on Home start. Backend already binds `0.0.0.0`; CORS fallback `["*"]` already permits the LAN origin, so no backend change was needed.
+- [x] **Rebuilt** `dist/AriaAppealLauncher.exe` (PyInstaller, tkinter + psutil bundled).

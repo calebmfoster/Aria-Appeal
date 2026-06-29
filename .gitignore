@@ -38,6 +38,7 @@ backend/Redis-x64.zip
 *.log
 backend/debug_*.txt
 backend/debug_*.md
+backend/_diag_*.py
 backend/seed_output.txt
 backend/test_4s.wav
 backend/test_output.txt
@@ -52,3 +53,4 @@ Thumbs.db
 
 # Claude Code local overrides
 .claude/settings.local.json
+.claude/worktrees/
