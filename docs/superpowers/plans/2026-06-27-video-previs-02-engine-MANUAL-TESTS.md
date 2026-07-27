@@ -85,7 +85,13 @@ print('path:', res.video_path, '| duration_ms:', res.duration_ms)
 **Look for:** the printed path points at `static/video/assets/demo_clip.mp4` and
 `duration_ms` is a sensible number (~3000).
 
-**GO** if it resolves the real file with a duration. **NO-GO** otherwise.
+3. Automated tests (3 passed — the third covers path traversal, added beyond Plan 2):
+```bash
+cd "D:/Repo/Aria Appeal/backend"
+./.venv/Scripts/python.exe -m pytest tests/test_asset_provider.py -v
+```
+
+**GO** if it resolves the real file with a duration and 3 tests pass. **NO-GO** otherwise.
 
 ---
 
@@ -96,18 +102,19 @@ print('path:', res.video_path, '| duration_ms:', res.duration_ms)
 cd "D:/Repo/Aria Appeal/backend"
 ./.venv/Scripts/python.exe -m pytest tests/test_video_factory.py -v
 ```
-**PASS criteria:** 5 passed.
+**PASS criteria:** 6 passed. (Plan 2 said 5; a sixth test was added covering an unknown
+`source_type`, which now raises ValueError rather than falling through to the billed
+Gemini path.)
 
-**GO** if 5 passed. **NO-GO** otherwise.
+**GO** if 6 passed. **NO-GO** otherwise.
 
 ---
 
 ## Checkpoint 6 — Launcher Gemini key UI (Task 6)
 
-1. Launch the GUI:
+1. Launch the GUI (bare `python` is not on PATH on this machine — use the venv interpreter):
 ```bash
-cd "D:/Repo/Aria Appeal"
-python launcher.py
+cd "D:/Repo/Aria Appeal" && ./backend/.venv/Scripts/python.exe launcher.py
 ```
 2. Open **⚙ Settings**. Confirm you see: a masked **Gemini API key** field, a **Veo model**
    field (default `veo-3.0-generate-001`), and a **video provider** toggle (gemini/local).
@@ -155,9 +162,43 @@ print('DONE ->', res.video_path, '| duration_ms:', res.duration_ms)
   that normalization will later standardize.
 
 **GO** if a real, playable, on-prompt clip is produced. **NO-GO** if the call errors, times
-out, or returns nothing — capture the full error for the agent. If the API rejects the
-`duration_seconds` or any config field, note the exact message: we may need to drop that
-field for the installed Veo model version.
+out, or returns nothing — capture the full error for the agent. If the API rejects
+`duration_seconds`, `resolution`, `generate_audio`, `person_generation`, or
+`reference_images`, note the **exact** message — the provider sets all of these and we may
+need to drop one for the installed Veo model version.
+
+### Checkpoint 4b — consistency across a cut (OPTIONAL, 💸 one MORE paid call)
+
+One clip proves the API works. It does not answer the question the whole feature rests on:
+**does a character stay recognizably the same across segments?** If shot-to-shot consistency
+doesn't hold, Plans 3–5 are built on sand — so it is worth learning now, at the cost of a
+second clip, rather than after the assembly pipeline exists.
+
+Run only if you're willing to spend a second generation. Reuses clip 1's tail as clip 2's
+first frame:
+```bash
+cd "D:/Repo/Aria Appeal/backend"
+./.venv/Scripts/python.exe -c "
+import asyncio
+from app.core.system_config import config_manager
+from app.services.video import ffmpeg_utils
+from app.services.video.gemini_provider import GeminiVeoProvider
+from app.services.video.base import VideoGenRequest
+import glob, os
+prev = max(glob.glob('static/video/clips/veo_*.mp4'), key=os.path.getmtime)
+tail = ffmpeg_utils.extract_last_frame(prev, 'static/video/clips/_tail.png')
+s = config_manager.get_settings()
+p = GeminiVeoProvider(api_key=s.gemini_api_key, model=s.veo_model, out_dir='static/video/clips', poll_interval_s=10, timeout_s=300)
+req = VideoGenRequest(prompt='The same golden retriever puppy stands and trots toward the camera', style_prompt='cinematic, soft natural light', init_image_path=tail, duration_s=8)
+res = asyncio.run(p.generate(req))
+print('CLIP 2 ->', res.video_path)
+"
+```
+**Look for:** does clip 2 read as the *same dog in the same meadow* as clip 1, or a different
+one? Watch them back to back.
+
+**Report back either way** — the answer decides whether Plan 3 leans on tail-frame chaining,
+on `reference_images` (the provider already supports `reference_image_paths`), or on both.
 
 ---
 
