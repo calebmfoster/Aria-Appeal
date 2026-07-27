@@ -1,6 +1,6 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-06-17
+**Last Updated**: 2026-07-27
 
 ## Critical / Blocking
 
@@ -54,9 +54,27 @@
 - ~~**TTS Mock Mode**~~: RESOLVED (Session 3) — Both models load and generate real speech on CPU.
 - **Tokenizer Warning**: `Qwen3TTSTokenizer` fails to load ("model type qwen3_tts not recognized by Transformers"). Embeddings use spectral fallback. May need `pip install --upgrade transformers` or install from source.
 - **Audio Data**: Reference audio stored at absolute paths in `static/voice_uploads/`. Generated audio at `static/audio/`. Preview URLs served via static mount.
-- **FFmpeg Dependency**: `ffmpeg`/`ffprobe` missing. Audio processing limited to WAV-only via `soundfile`.
+- ~~**FFmpeg Dependency**~~: RESOLVED (2026-06-27, video previs prereqs) — ffmpeg/ffprobe 8.1.2 installed via winget (`Gyan.FFmpeg`) and on PATH. Audio processing still WAV-only via `soundfile`; ffmpeg is used by the video pipeline (`app/services/video/ffmpeg_utils.py`), which also honours `FFMPEG_BINARY`/`FFPROBE_BINARY` overrides.
 - **SoX Warning**: "SoX could not be found" at startup — cosmetic, doesn't affect functionality.
 - **Setuptools Compatibility**: `pyloudnorm` requires `pkg_resources`. Fixed by pinning `setuptools<70.0.0`.
+
+## Testing (noted 2026-07-27)
+
+- **5 stale backend tests fail, unrelated to current work (open)**: Verified pre-existing by
+  running the suite at `5e03c28` (the commit before Plan 2 Task 3) — same 5 failures. They test
+  architecture the project has since moved off:
+  - `test_audio_generation.py::test_tts_service_qwen_local_fallback` and `::test_generate_audio_endpoint`
+    — patch `generate_audio_task.delay`, i.e. Celery. The project uses FastAPI `BackgroundTasks`.
+  - `test_manual_generation.py::test_llm_parsing` and `::test_llm_parsing_wrapper`
+    — reference `app.services.llm.client`, removed in the Session 6 Claude-provider refactor.
+  - `test_settings.py::test_settings_api` — POSTs `llm_provider: "openai"`, which the
+    `Literal["claude","local"]` on `SystemSettings` rejects with 422.
+  **Fix direction**: rewrite against the current architecture or delete. Until then they mask real
+  regressions — the video work's 31 tests pass, but "5 failed" is the suite's normal state.
+- **Anthropic API key printed to pytest stdout (open, minor)**: `test_settings_api` prints the full
+  settings dict, including the live `anthropic_api_key` from `config.json`. `backend/config.json`
+  is gitignored, but CI logs or a pasted test run would leak the key. Redact the print when fixing
+  the test above.
 
 ## Infrastructure
 
