@@ -69,6 +69,8 @@ NETWORK_MODES = [
     # Future: ("Tailscale", "tailscale"), ("Public (internet)", "public")
 ]
 
+DEFAULT_VEO_MODEL = "veo-3.0-generate-001"
+
 DEFAULT_CONFIG = {
     "llm_provider": "claude",
     "claude_model": "claude-haiku-4-5",
@@ -77,6 +79,9 @@ DEFAULT_CONFIG = {
     "tts_provider": "qwen3-local",
     "tts_model": "qwen3-tts",
     "network_mode": "localhost",
+    "video_provider": "gemini",
+    "gemini_api_key": "",
+    "veo_model": DEFAULT_VEO_MODEL,
 }
 
 
@@ -485,9 +490,75 @@ class LauncherApp(tk.Tk):
             )
             rb.pack(anchor="w")
 
+        # ── Video provider ───────────────────────────────────────────────────
+        tk.Frame(f, bg="#374151", height=1).grid(
+            row=4, column=0, columnspan=2, sticky="ew", padx=12, pady=(10, 2))
+
+        tk.Label(f, text="Video Provider", font=self._label_font,
+                 bg=PANEL_BG, fg="#9ca3af").grid(row=5, column=0, sticky="w", **pad)
+
+        self._video_provider_var = tk.StringVar(value=self._cfg.get("video_provider", "gemini"))
+
+        vid_frame = tk.Frame(f, bg=PANEL_BG)
+        vid_frame.grid(row=5, column=1, sticky="w", **pad)
+
+        for label, val in [("Gemini (Veo)", "gemini"), ("Local (not yet available)", "local")]:
+            rb = tk.Radiobutton(
+                vid_frame, text=label, variable=self._video_provider_var, value=val,
+                font=self._label_font, bg=PANEL_BG, fg=FG,
+                selectcolor=BG, activebackground=PANEL_BG, activeforeground=FG,
+                command=self._on_video_provider_change
+            )
+            rb.pack(side="left", padx=(0, 12))
+
+        # ── Gemini API key ───────────────────────────────────────────────────
+        self._gemini_key_label = tk.Label(f, text="Gemini API Key", font=self._label_font,
+                                          bg=PANEL_BG, fg="#9ca3af")
+        self._gemini_key_label.grid(row=6, column=0, sticky="w", **pad)
+
+        gem_frame = tk.Frame(f, bg=PANEL_BG)
+        gem_frame.grid(row=6, column=1, sticky="w", **pad)
+
+        self._gemini_key_var = tk.StringVar(value=self._cfg.get("gemini_api_key", ""))
+        self._gemini_key_entry = tk.Entry(
+            gem_frame, textvariable=self._gemini_key_var, show="•",
+            width=38, font=self._mono_font,
+            bg=INPUT_BG, fg=INPUT_FG, insertbackground=FG,
+            relief="flat", bd=4
+        )
+        self._gemini_key_entry.pack(side="left", padx=(0, 6))
+
+        self._show_gemini_key_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            gem_frame, text="Show", variable=self._show_gemini_key_var,
+            font=self._small_font, bg=PANEL_BG, fg="#9ca3af",
+            selectcolor=BG, activebackground=PANEL_BG,
+            command=self._toggle_gemini_key_visibility
+        ).pack(side="left")
+
+        # ── Veo model ────────────────────────────────────────────────────────
+        self._veo_model_label = tk.Label(f, text="Veo Model", font=self._label_font,
+                                         bg=PANEL_BG, fg="#9ca3af")
+        self._veo_model_label.grid(row=7, column=0, sticky="w", **pad)
+
+        veo_frame = tk.Frame(f, bg=PANEL_BG)
+        veo_frame.grid(row=7, column=1, sticky="w", **pad)
+
+        self._veo_model_var = tk.StringVar(value=self._cfg.get("veo_model", DEFAULT_VEO_MODEL))
+        self._veo_model_entry = tk.Entry(
+            veo_frame, textvariable=self._veo_model_var,
+            width=38, font=self._mono_font,
+            bg=INPUT_BG, fg=INPUT_FG, insertbackground=FG,
+            relief="flat", bd=4
+        )
+        self._veo_model_entry.pack(side="left")
+
+        tk.Label(veo_frame, text="⚠ generates billed video", font=self._small_font,
+                 bg=PANEL_BG, fg="#f59e0b").pack(side="left", padx=(8, 0))
+
         # ── Save button ──────────────────────────────────────────────────────
         save_frame = tk.Frame(f, bg=PANEL_BG)
-        save_frame.grid(row=4, column=0, columnspan=2, sticky="e", padx=12, pady=(6, 10))
+        save_frame.grid(row=8, column=0, columnspan=2, sticky="e", padx=12, pady=(6, 10))
 
         self._save_status_label = tk.Label(save_frame, text="", font=self._small_font,
                                            bg=PANEL_BG, fg="#22c55e")
@@ -500,8 +571,9 @@ class LauncherApp(tk.Tk):
             command=self._save_settings
         ).pack(side="left")
 
-        # Sync visibility to current provider
+        # Sync visibility to current providers
         self._on_provider_change()
+        self._on_video_provider_change()
 
     def _toggle_settings(self):
         if self._settings_open:
@@ -532,14 +604,31 @@ class LauncherApp(tk.Tk):
         for w in self._local_model_frame.winfo_children():
             w.configure(state=state_local)
 
+    def _on_video_provider_change(self):
+        # The Gemini key/model only matter on the gemini path; grey them out on local.
+        is_gemini = self._video_provider_var.get() == "gemini"
+        fg = "#9ca3af" if is_gemini else "#4b5563"
+        state = "normal" if is_gemini else "disabled"
+
+        self._gemini_key_label.configure(fg=fg)
+        self._veo_model_label.configure(fg=fg)
+        self._gemini_key_entry.configure(state=state)
+        self._veo_model_entry.configure(state=state)
+
     def _toggle_key_visibility(self):
         self._api_key_entry.configure(show="" if self._show_key_var.get() else "•")
+
+    def _toggle_gemini_key_visibility(self):
+        self._gemini_key_entry.configure(show="" if self._show_gemini_key_var.get() else "•")
 
     def _save_settings(self):
         self._cfg["llm_provider"] = self._provider_var.get()
         self._cfg["claude_model"] = self._claude_model_var.get()
         self._cfg["anthropic_api_key"] = self._api_key_var.get().strip()
         self._cfg["llm_model_id"] = self._local_model_var.get()
+        self._cfg["video_provider"] = self._video_provider_var.get()
+        self._cfg["gemini_api_key"] = self._gemini_key_var.get().strip()
+        self._cfg["veo_model"] = self._veo_model_var.get().strip() or DEFAULT_VEO_MODEL
         _save_config(self._cfg)
         self._refresh_provider_strip()
         self._save_status_label.configure(text="Saved ✓")
