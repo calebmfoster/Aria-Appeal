@@ -43,6 +43,7 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
     const [showAdvanced, setShowAdvanced] = React.useState(false)
     const [voiceProfiles, setVoiceProfiles] = React.useState<VoiceProfile[]>([])
     const [selectedVoice, setSelectedVoice] = React.useState('default')
+    const [medium, setMedium] = React.useState<'audio' | 'video'>('audio')
     const [formData, setFormData] = React.useState({
         target_audience: "",
         cause: "",
@@ -101,6 +102,8 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                     payload.voice_profile_id = selectedVoice;
                 }
             }
+
+            payload.medium = medium;
 
             const res = await apiFetch('/projects', {
                 method: 'POST',
@@ -212,6 +215,31 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                         onChange={handleChange}
                         className="rounded-xl border-gray-200 focus:ring-2 focus:ring-moore-red/30 focus:border-moore-red"
                     />
+                </div>
+
+                {/* Medium — video campaigns get an Audio | Video tab in the studio.
+                    Audio-only campaigns render exactly as they do today. */}
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-moore-dark-gray">Deliverable</label>
+                    <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg">
+                        {(['audio', 'video'] as const).map(value => (
+                            <button
+                                key={value}
+                                type="button"
+                                onClick={() => setMedium(value)}
+                                className={`flex-1 text-[11px] py-1.5 rounded-md font-medium transition-all ${
+                                    medium === value
+                                        ? 'bg-white text-moore-black shadow-sm'
+                                        : 'text-moore-mid-gray hover:text-moore-dark-gray'
+                                }`}
+                            >
+                                {value === 'audio' ? 'Audio only' : 'Audio + video'}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[11px] text-moore-mid-gray">
+                        Video campaigns gain a Video tab in the studio for previsualisation.
+                    </p>
                 </div>
 
                 {/* Voice — applied to every segment; cohesion comes from chained generation */}
