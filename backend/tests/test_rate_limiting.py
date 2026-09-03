@@ -18,9 +18,22 @@ async def override_get_db():
         async def refresh(self, *args, **kwargs): pass
     yield MockSession()
 
-app.dependency_overrides[get_db] = override_get_db
-
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _override_db():
+    """Install per-test, not at import time.
+
+    Other test modules clear app.dependency_overrides in their own teardown, so
+    a module-level assignment here is wiped by whichever of them happens to run
+    first — and /auth/register then hits the real asyncpg pool on a closed event
+    loop. Applying it per test makes this file order-independent.
+    """
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
 
 def test_rate_limit_register():
     # Clear limiter state for the test
