@@ -6,8 +6,13 @@ Fitting rule: each beat's window is the LONGER of its clip and its narration.
 Explicit trims from the editor always win over the clip's natural duration.
 """
 import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from typing import List, Optional
+
+from app.services.video import ffmpeg_utils
 
 # ASS alignment codes (numpad layout): 2 = bottom centre, 8 = top, 5 = middle.
 _ALIGNMENT = {"bottom": 2, "top": 8, "center": 5}
@@ -158,3 +163,92 @@ def build_ass(beats: List[Beat], style: Optional[dict] = None) -> str:
             )
 
     return "\n".join(head + events) + "\n"
+
+
+def _run(cmd, cwd=None):
+    subprocess.run(cmd, check=True, capture_output=True, cwd=cwd)
+
+
+def _concat_list(work_dir: str, name: str, parts: List[str]) -> str:
+    """Write a concat-demuxer list of RELATIVE names, so ffmpeg runs with cwd set
+    to work_dir and we never have to escape Windows paths."""
+    path = os.path.join(work_dir, name)
+    with open(path, "w", encoding="utf-8") as f:
+        for part in parts:
+            f.write(f"file '{os.path.basename(part)}'\n")
+    return path
+
+
+def _prepare_video(beat: Beat, work_dir: str, index: int) -> str:
+    """trim -> normalize -> freeze-pad, so every part is codec-identical for concat."""
+    stem = f"v{index:03d}"
+    current = beat.clip_path
+
+    if beat.trim_start_ms or beat.trim_end_ms is not None:
+        trimmed = os.path.join(work_dir, f"{stem}_trim.mp4")
+        current = ffmpeg_utils.trim_clip(current, trimmed, beat.trim_start_ms, beat.trim_end_ms)
+
+    normalized = os.path.join(work_dir, f"{stem}_norm.mp4")
+    current = ffmpeg_utils.normalize_clip(current, normalized)
+
+    if beat.pad_ms > 0:
+        padded = os.path.join(work_dir, f"{stem}_pad.mp4")
+        current = ffmpeg_utils.freeze_pad_clip(current, padded, beat.pad_ms)
+
+    final = os.path.join(work_dir, f"{stem}.mp4")
+    if os.path.abspath(current) != os.path.abspath(final):
+        shutil.move(current, final)
+    return final
+
+
+def _prepare_audio(beat: Beat, work_dir: str, index: int) -> str:
+    out = os.path.join(work_dir, f"a{index:03d}.wav")
+    if beat.audio_path and os.path.exists(beat.audio_path):
+        return ffmpeg_utils.pad_audio(beat.audio_path, out, beat.window_ms)
+    return ffmpeg_utils.silent_audio(out, beat.window_ms)
+
+
+def assemble(beats: List[Beat], out_path: str, style: Optional[dict] = None,
+             work_dir: Optional[str] = None) -> str:
+    """Fit, concatenate, mux narration and burn captions into one MP4."""
+    if not beats:
+        raise ValueError("Cannot assemble a video with no beats.")
+
+    ff = ffmpeg_utils._require(ffmpeg_utils.resolve_ffmpeg(), "ffmpeg")
+
+    temp_created = work_dir is None
+    work_dir = work_dir or tempfile.mkdtemp(prefix="aria_assembly_")
+    os.makedirs(work_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+
+    try:
+        video_parts = [_prepare_video(b, work_dir, i) for i, b in enumerate(beats)]
+        audio_parts = [_prepare_audio(b, work_dir, i) for i, b in enumerate(beats)]
+
+        _concat_list(work_dir, "video.txt", video_parts)
+        _concat_list(work_dir, "audio.txt", audio_parts)
+
+        _run([ff, "-y", "-f", "concat", "-safe", "0", "-i", "video.txt",
+              "-c", "copy", "track_video.mp4"], cwd=work_dir)
+        _run([ff, "-y", "-f", "concat", "-safe", "0", "-i", "audio.txt",
+              "-c", "copy", "track_audio.wav"], cwd=work_dir)
+
+        ass = build_ass(beats, style)
+        has_captions = "Dialogue:" in ass
+        with open(os.path.join(work_dir, "subs.ass"), "w", encoding="utf-8") as f:
+            f.write(ass)
+
+        cmd = [ff, "-y", "-i", "track_video.mp4", "-i", "track_audio.wav"]
+        if has_captions:
+            # Relative filename + cwd=work_dir avoids the filtergraph path-escaping
+            # problem on Windows (drive colons and backslashes both break it).
+            cmd += ["-vf", "subtitles=subs.ass"]
+        cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+                "-shortest", "muxed.mp4"]
+        _run(cmd, cwd=work_dir)
+
+        shutil.move(os.path.join(work_dir, "muxed.mp4"), out_path)
+        return out_path
+    finally:
+        if temp_created:
+            shutil.rmtree(work_dir, ignore_errors=True)

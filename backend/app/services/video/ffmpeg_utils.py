@@ -94,3 +94,67 @@ def extract_last_frame(video_path: str, out_image_path: str) -> str:
         check=True, capture_output=True,
     )
     return out_image_path
+
+
+def trim_clip(src_path: str, dst_path: str, start_ms: int = 0,
+              end_ms: Optional[int] = None) -> str:
+    """Cut [start_ms, end_ms) out of a clip. Re-encodes so cuts land on exact
+    frames rather than the nearest keyframe."""
+    ff = _require(resolve_ffmpeg(), "ffmpeg")
+    os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
+    cmd = [ff, "-y", "-ss", f"{max(0, start_ms) / 1000:.3f}"]
+    if end_ms is not None:
+        cmd += ["-to", f"{max(0, end_ms) / 1000:.3f}"]
+    cmd += ["-i", src_path, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dst_path]
+    subprocess.run(cmd, check=True, capture_output=True)
+    return dst_path
+
+
+def freeze_pad_clip(src_path: str, dst_path: str, pad_ms: int) -> str:
+    """Extend a clip by holding its final frame for pad_ms.
+
+    tpad is the whole trick: clone_mode=clone repeats the last frame rather than
+    inserting black, which is the animatic convention for covering an overrun.
+    """
+    ff = _require(resolve_ffmpeg(), "ffmpeg")
+    os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
+    if pad_ms <= 0:
+        subprocess.run(
+            [ff, "-y", "-i", src_path, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dst_path],
+            check=True, capture_output=True,
+        )
+        return dst_path
+    vf = f"tpad=stop_mode=clone:stop_duration={pad_ms / 1000:.3f}"
+    subprocess.run(
+        [ff, "-y", "-i", src_path, "-vf", vf,
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dst_path],
+        check=True, capture_output=True,
+    )
+    return dst_path
+
+
+def pad_audio(src_path: str, dst_path: str, total_ms: int) -> str:
+    """Force audio to exactly total_ms — trailing silence if short, cut if long."""
+    ff = _require(resolve_ffmpeg(), "ffmpeg")
+    os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
+    seconds = max(0, total_ms) / 1000
+    subprocess.run(
+        [ff, "-y", "-i", src_path,
+         "-af", f"apad=whole_dur={seconds:.3f}",
+         "-t", f"{seconds:.3f}", "-ar", "44100", "-ac", "2", dst_path],
+        check=True, capture_output=True,
+    )
+    return dst_path
+
+
+def silent_audio(dst_path: str, duration_ms: int) -> str:
+    """A silent track, for a beat whose segment has no narration yet."""
+    ff = _require(resolve_ffmpeg(), "ffmpeg")
+    os.makedirs(os.path.dirname(dst_path) or ".", exist_ok=True)
+    seconds = max(0, duration_ms) / 1000
+    subprocess.run(
+        [ff, "-y", "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+         "-t", f"{seconds:.3f}", dst_path],
+        check=True, capture_output=True,
+    )
+    return dst_path
