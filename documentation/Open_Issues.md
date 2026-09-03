@@ -1,6 +1,6 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-07-27
+**Last Updated**: 2026-09-02
 
 ## Critical / Blocking
 
@@ -57,6 +57,23 @@
 - ~~**FFmpeg Dependency**~~: RESOLVED (2026-06-27, video previs prereqs) — ffmpeg/ffprobe 8.1.2 installed via winget (`Gyan.FFmpeg`) and on PATH. Audio processing still WAV-only via `soundfile`; ffmpeg is used by the video pipeline (`app/services/video/ffmpeg_utils.py`), which also honours `FFMPEG_BINARY`/`FFPROBE_BINARY` overrides.
 - **SoX Warning**: "SoX could not be found" at startup — cosmetic, doesn't affect functionality.
 - **Setuptools Compatibility**: `pyloudnorm` requires `pkg_resources`. Fixed by pinning `setuptools<70.0.0`.
+
+## Dashboard — Voice previews (open, noted 2026-09-02)
+
+- **Every voice preview should say "Welcome to Aria Appeal"; none of them do.** Two distinct bugs
+  behind one symptom:
+  - **Cloned voices play the raw source clip.** `preview_url` is built in
+    `app/schemas/voice_profile.py:34` as `/static/voice_uploads/{filename}` — it is literally the
+    reference audio the user uploaded for cloning, so previewing plays back their whole original
+    recording rather than a sample of the cloned voice.
+  - **Preset ("emotional intelligence") voices have no preview at all.** Presets have no
+    `reference_audio_path`, so `preview_url` resolves to `None`
+    (`voice_profile.py:29`) and `VoiceList.tsx:195` hides the play button entirely.
+  **Fix direction:** synthesize a fixed preview line ("Welcome to Aria Appeal") through the normal
+  TTS path for both voice types and cache it to `static/audio/preview_{profile_id}.wav` (clones) and
+  `preview_preset_{speaker}.wav` (presets, shared across users). Generate lazily on first request,
+  or at profile-creation time for clones. Point `preview_url` at the cached file rather than the
+  upload. Note the preset list is English-only in practice — see the native-languages entry above.
 
 ## Testing (noted 2026-07-27)
 
