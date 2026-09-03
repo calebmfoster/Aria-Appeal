@@ -63,7 +63,7 @@ scene window. Measured against Aiden, all six now fit with 2.95s of total slack.
 | 3 | 8.0–12.0s | So we took her to the space center. The doors opened. | 2.8s | warm | Daylight. Maya walks through the tall glass doors of a space center, helmet under one arm, looking up at a full-size rocket model. Wide, low angle. |
 | 4 | 12.0–15.4s | Maya wasn't a patient anymore. She was a pilot. | 3.1s | uplifting | Maya in a launch simulator seat, helmet on, hands on the controls. Warm light washes over her as the screens glow. Slow orbit around the seat. |
 | 5 | 15.4–19.4s | A wish is when hope becomes something you can hold. | 3.2s | sincere | Maya outside at golden hour, arms wide, scarf streaming behind her, spinning. Adults out of focus behind her, laughing. Handheld warmth. |
-| 6 | 19.4–24.0s | Another child is waiting. Your gift reaches them today. | 4.2s | urgent | The yellow scarf hangs on a hook by the hospital window, the bed neatly made, morning light filling the empty room. Static, slow fade. |
+| 6 | 19.4–24.0s | Another child is waiting. Your gift reaches them today. | 4.2s | urgent | Maya stands in the field and looks up. The sky fades from golden hour to night, and a shooting star crosses it. Static, slow fade. |
 
 Shot 6 carries the ask emotionally; the narration does the literal work. Medical context stays
 implied throughout — never depicted.
@@ -76,19 +76,19 @@ cut of scene 6 took 13 words in 5.7s (2.3 w/s), purely because scene 6 had three
 line must fit a tight window, **join clauses with commas rather than splitting into sentences** —
 that saves more time than deleting words.
 
-### OPEN ISSUE — scene 6 reads as a death
+### RESOLVED — scene 6 no longer reads as a death
 
-An empty hospital bed with the child's scarf left behind is ambiguous, and a viewer can read it as
-Maya having died. For an organization serving children with critical illnesses, that is a real risk
-and the narration does not fully mitigate it — the picture carries more than the words. Fixes, in
-order of preference:
+The original scene 6 was an empty hospital bed with the scarf left on a hook. That is ambiguous: a
+viewer can read it as Maya having died, which is a serious risk in front of an organization serving
+children with critical illnesses. **Replaced 2026-09-02** with Maya alive in the field, looking up as
+the sky fades to night and a shooting star crosses it.
 
-1. Regenerate with Maya visibly leaving — walking toward a bright doorway, scarf on, empty bed
-   behind her. Keeps the structure, removes the reading.
-2. End on scene 5 (spinning in the field) and place the ask there. Removes the risk entirely.
-3. Add a drawing taped to the window — a sign of a life that continued.
+The replacement is better than a fix. It bookends scene 2's starfield, the shooting star carries the
+wish metaphor without stating it, and the final frames are open sky — clean real estate for a logo
+and donate CTA in a finished spot, which is worth pointing out in the room.
 
-Unresolved as of 2026-09-02. Costs one Flow credit to fix.
+Kept as a record because it generalizes: when the tool generates an ending on an absence, check what
+the absence implies. That judgment is the human-in-the-loop step the product is built around.
 
 ---
 
