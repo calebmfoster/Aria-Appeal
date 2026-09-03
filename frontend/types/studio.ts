@@ -27,3 +27,16 @@ export interface AudioRegion {
     drag?: boolean;
     resize?: boolean;
 }
+
+export type {
+    CampaignMedium,
+    StudioTab,
+    VideoClip,
+    VideoClipStatus,
+    VideoSourceType,
+    VideoBrief,
+    SubtitleStyle,
+    VideoExportStatus,
+    VideoExportState,
+} from './video';
+export { DEFAULT_SUBTITLE_STYLE, IDLE_EXPORT } from './video';

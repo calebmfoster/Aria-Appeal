@@ -1,5 +1,15 @@
 import { create } from 'zustand';
-import { ScriptSegment, VoiceProfile } from '../types/studio';
+import {
+    ScriptSegment,
+    VoiceProfile,
+    CampaignMedium,
+    StudioTab,
+    VideoClip,
+    VideoBrief,
+    SubtitleStyle,
+    VideoExportState,
+} from '../types/studio';
+import { IDLE_EXPORT } from '../types/video';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -21,6 +31,15 @@ interface StudioState {
     // Generation State
     generatingSegments: Record<string, boolean>;
 
+    // Video State
+    medium: CampaignMedium;
+    activeTab: StudioTab;
+    videoClips: VideoClip[];
+    videoBrief: VideoBrief | null;
+    subtitleStyle: SubtitleStyle | null;
+    videoExport: VideoExportState;
+    activeClipId: string | null;
+
     // Save State
     saveStatus: SaveStatus;
     dirtySegments: Record<string, boolean>;
@@ -37,6 +56,12 @@ interface StudioState {
 
     setActiveSegment: (id: string | null) => void;
     setGeneratingSegment: (id: string, isGenerating: boolean) => void;
+    setActiveTab: (tab: StudioTab) => void;
+    setVideoClips: (clips: VideoClip[]) => void;
+    setVideoBrief: (brief: VideoBrief | null) => void;
+    setSubtitleStyle: (style: SubtitleStyle | null) => void;
+    setVideoExport: (state: VideoExportState) => void;
+    setActiveClip: (id: string | null) => void;
     fetchProjectData: (projectId: string, token: string) => Promise<void>;
     addSegment: (segment: ScriptSegment) => void;
     removeSegment: (id: string) => void;
@@ -60,6 +85,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     duration: 0,
     activeSegmentId: null,
     generatingSegments: {},
+    medium: 'audio',
+    activeTab: 'audio',
+    videoClips: [],
+    videoBrief: null,
+    subtitleStyle: null,
+    videoExport: IDLE_EXPORT,
+    activeClipId: null,
     saveStatus: 'idle',
     dirtySegments: {},
 
@@ -105,6 +137,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
             [id]: isGenerating
         }
     })),
+
+    setActiveTab: (activeTab) => set({ activeTab }),
+    setVideoClips: (videoClips) => set({ videoClips }),
+    setVideoBrief: (videoBrief) => set({ videoBrief }),
+    setSubtitleStyle: (subtitleStyle) => set({ subtitleStyle }),
+    setVideoExport: (videoExport) => set({ videoExport }),
+    setActiveClip: (activeClipId) => set({ activeClipId }),
 
     addSegment: (segment) => set((state) => ({
         script: [...state.script, segment],
@@ -185,6 +224,11 @@ export const useStudioStore = create<StudioState>((set, get) => ({
                 isPlaying: false,
                 generatingSegments: {},
                 saveStatus: 'idle',
+                // Absent means audio, so campaigns created before the video work
+                // render with no tab bar at all.
+                medium: project.target_audience?.medium === 'video' ? 'video' : 'audio',
+                activeTab: 'audio',
+                activeClipId: null,
             });
         } catch (error) {
             console.error("Error fetching project:", error);
