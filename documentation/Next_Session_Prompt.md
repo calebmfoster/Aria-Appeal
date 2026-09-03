@@ -1,4 +1,4 @@
-# Next Session Prompt: Video Previsualization — Plan 3 (Orchestration)
+# Next Session Prompt: Video Previsualization — Plan 5 (Audio | Video Studio)
 
 Read `CLAUDE.md`, `documentation/Project_Progress.md`, `documentation/Open_Issues.md`, and
 `documentation/Product_Roadmap.md` (Tier V) for full context.
@@ -23,7 +23,11 @@ different video provider. Two rules follow:
 
 ## State after Session 13 (2026-09-02)
 
-**Plan 2 (video engine) is fully coded** on `feat/video-previs` — 31 video tests pass.
+**Plans 2 and 4 are fully coded and executed** on `feat/video-previs` — 81 backend tests pass
+(5 pre-existing failures unrelated to video, logged in `Open_Issues.md`).
+
+**The demo animatic exists**: `static/video/animatic_<project_id>.mp4`, 23.87s, 1920x1080, 30fps —
+six Flow clips, Aiden narration locked per scene, burned-in captions.
 
 - `VideoProvider` ABC, `AssetVideoProvider`, `GeminiVeoProvider`, `LocalVideoProvider`, factory.
 - ffmpeg utils (normalize / probe / extract-last-frame); ffmpeg 8.1.2 is installed and on PATH.
@@ -64,22 +68,22 @@ time over UI completeness.
 Art-direction LLM pass, clip provisioning, normalize-on-ingest, upload/asset endpoints,
 provider-agnostic sequential generation with tail chaining, editor CRUD. Two manual checkpoints.
 
-### Priority 2 — Plan 4: ffmpeg assembly (DONE 2026-09-02)
+### Priority 2 — Plan 4: ffmpeg assembly — DONE 2026-09-02
 
-The demo's payoff: fit clips to narration beats (freeze-last-frame padding), concat, mux master
-narration, burn ASS subtitles, output MP4. Write this plan after Plan 3's Checkpoint A proves a real
-Flow clip survives ingest.
+`docs/superpowers/plans/2026-09-02-video-previs-04-assembly.md`, fully executed. Timeline fitting,
+ASS captions, trim/freeze-pad primitives, `assemble`/`assemble_project`, and the export endpoint.
+The Make-A-Wish animatic is built and plays. Rebuild any time with:
 
-### Priority 3 — see Priority 0 above
-
-Video preview, clip inspector, timeline strip with reorder/trim/replace, subtitle toggle.
+```bash
+cd "D:/Repo/Aria Appeal/backend" && ./.venv/Scripts/python.exe scripts/assemble_demo.py
+```
 
 ### Schedule risk
 
-Plans 3, 4 and 5 in ten working days is tight, and **Plan 5 (the UI) is the piece most likely to
-slip.** Mitigation: Plan 4 produces a standalone MP4 through the API alone. If the Video tab isn't
-ready, the demo still works — play the assembled MP4 next to the existing, fully-featured audio
-studio and present the editor as the next increment. Protect the assembly milestone over the UI.
+One plan left instead of three, so the remaining risk is concentrated in the frontend. The
+assembly milestone is already banked, which was the point of building Plan 4 first — the demo has
+a floor now regardless of how Plan 5 goes. Spend leftover time on rehearsal and the two content
+items below, not on UI polish.
 
 ---
 
@@ -99,6 +103,8 @@ Content work, separate from the code plans. Most of it gates on nothing and shou
 - [ ] **Second live campaign** built in the room to show the emotion controls and per-segment
       direction working end to end. This is the "on the fly" half of the demo; the Make-A-Wish
       fixture is the pre-loaded half.
+- [ ] **Watch the assembled animatic end to end** — frames, durations and streams are verified, but
+      nobody has yet confirmed the read lands or that the scene 5-6 cut feels right at speed.
 - [ ] **Rehearse once end to end** on the actual demo machine, in the network mode you'll present in.
 
 Framing note: video previs is presented as a **stretch goal / WIP**, deliberately — it argues for
