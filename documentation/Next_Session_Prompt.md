@@ -67,6 +67,30 @@ slip.** Mitigation: Plan 4 produces a standalone MP4 through the API alone. If t
 ready, the demo still works — play the assembled MP4 next to the existing, fully-featured audio
 studio and present the editor as the next increment. Protect the assembly milestone over the UI.
 
+---
+
+## DEMO PREP CHECKLIST (week of 2026-09-14)
+
+Content work, separate from the code plans. Most of it gates on nothing and should happen early.
+
+- [x] **Seeded happy-path campaign** — `Make-A-Wish (Demo)` on `admin@example.com`, six segments +
+      six pending clips with shot prompts. Rebuild with
+      `backend/scripts/seed_makeawish_demo.py --reset`.
+- [x] **Narration generated** with the Aiden preset.
+- [ ] **Generate the six Flow clips** — `documentation/Demo_MakeAWish_Brief.md` has paste-ready
+      prompts. Six shots exceeds one day of free Flow credits, so **start early**; this is the real
+      gate on demo material, not the code.
+- [ ] **Pre-baked voice clone of Caleb** for a second example campaign, so cloning is demonstrated
+      from a finished artifact rather than performed live.
+- [ ] **Second live campaign** built in the room to show the emotion controls and per-segment
+      direction working end to end. This is the "on the fly" half of the demo; the Make-A-Wish
+      fixture is the pre-loaded half.
+- [ ] **Rehearse once end to end** on the actual demo machine, in the network mode you'll present in.
+
+Framing note: video previs is presented as a **stretch goal / WIP**, deliberately — it argues for
+continued engagement. The provider-swap architecture is the credible-engineering half of that
+pitch, and it is genuinely true: changing video backends is a config switch.
+
 ### Deferred — Tier 3 gaps (only if capacity appears, which it won't before the demo)
 
 - Forgot-password / reset flow

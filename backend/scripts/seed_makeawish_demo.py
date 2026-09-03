@@ -148,6 +148,10 @@ async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
             print(f"  segments   : {len(existing.segments)}")
             print(f"  clips      : {len(existing.video_clips)}")
             print("\nRe-run with --reset to rebuild it from scratch.")
+            # Fall through to audio: --with-audio must work on an already-seeded
+            # project, which is the normal case once the fixture exists.
+            if with_audio:
+                await _run_audio(existing.id)
             return
 
         if existing:
@@ -212,13 +216,18 @@ async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
         print("The copy contains no statistics by design; add real figures if you want numbers.")
 
     if with_audio:
-        print("\nGenerating narration audio (real TTS, this takes a while)...")
-        from app.api.routes.projects import _generate_baseline_audio_for_project
-        await _generate_baseline_audio_for_project(project.id)
-        print("Audio generation finished.")
+        await _run_audio(project.id)
     else:
         print("\nNarration audio NOT generated. Re-run with --with-audio, or hit "
               "Regenerate in the studio.")
+
+
+async def _run_audio(project_id) -> None:
+    """Run the real chained TTS pipeline over the project's segments."""
+    print("\nGenerating narration audio (real TTS on GPU, this takes a while)...")
+    from app.api.routes.projects import _generate_baseline_audio_for_project
+    await _generate_baseline_audio_for_project(project_id)
+    print("Audio generation finished.")
 
 
 def main() -> None:
