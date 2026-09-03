@@ -27,7 +27,7 @@ def _segment(order, text, audio_url, start_ms, end_ms):
     )
 
 
-CLIP_DIR = "/clips"
+CLIP_DIR = "/static_root"
 AUDIO_DIR = "/audio"
 
 
@@ -119,14 +119,23 @@ def test_clip_without_audio_is_silent_but_present():
     assert b.pad_ms == 0
 
 
-def test_paths_are_resolved_from_basenames():
-    clips = [_clip(0, "/static/video/assets/a.mp4", 4000)]
-    segs = [_segment(0, "x", "/static/audio/a.wav", 0, 1000)]
+def test_clip_path_keeps_its_static_subpath():
+    """Clips live in different subdirs by source (assets/clips/uploads), so the
+    URL's own subpath must survive — resolving by basename would collapse them."""
+    clips = [
+        _clip(0, "/static/video/assets/a.mp4", 4000),
+        _clip(1, "/static/video/clips/b.mp4", 4000),
+    ]
+    segs = [
+        _segment(0, "x", "/static/audio/a.wav", 0, 1000),
+        _segment(1, "y", "/static/audio/b.wav", 0, 1000),
+    ]
     beats = compute_timeline(clips, segs, CLIP_DIR, AUDIO_DIR)
 
-    b = beats[0]
-    assert b.clip_path.replace("\\", "/") == "/clips/a.mp4"
-    assert b.audio_path.replace("\\", "/") == "/audio/a.wav"
+    assert beats[0].clip_path.replace("\\", "/") == "/static_root/video/assets/a.mp4"
+    assert beats[1].clip_path.replace("\\", "/") == "/static_root/video/clips/b.mp4"
+    # Audio is flat in tts_service.output_dir, so it still joins by basename.
+    assert beats[0].audio_path.replace("\\", "/") == "/audio/a.wav"
 
 
 def test_clip_with_no_video_url_is_skipped():

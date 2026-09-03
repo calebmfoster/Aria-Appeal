@@ -98,8 +98,8 @@ SEGMENTS = [
     (
         "Another child is waiting. Your gift reaches them today.",
         "urgent",
-        "The yellow scarf hangs on a hook by the hospital window, the bed neatly made, "
-        "morning light filling the empty room. Static, slow fade.",
+        "Maya stands in the field and looks up. The sky fades from golden hour to night, "
+        "and a shooting star crosses it. Static, slow fade.",
         19400, 24000,
     ),
 ]
@@ -178,7 +178,7 @@ async def seed(email: str | None, reset: bool, with_audio: bool, attach_clips: b
             },
             status=ProjectStatus.GENERATED,
             video_brief={"style_prompt": STYLE_PROMPT, "character_sheet": CHARACTER_SHEET},
-            subtitle_style={"enabled": True, "font_size": 36, "position": "bottom", "color": "FFFFFF"},
+            subtitle_style={"enabled": True, "font_size": 54, "position": "bottom", "color": "FFFFFF"},
         )
         db.add(project)
         await db.flush()

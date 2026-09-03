@@ -38,6 +38,21 @@ def _basename_join(directory: str, url: Optional[str]) -> Optional[str]:
     return os.path.join(directory, os.path.basename(url))
 
 
+def _static_join(static_root: str, url: Optional[str]) -> Optional[str]:
+    """Map a served URL to a path under the static root.
+
+    Resolves the URL's own subpath rather than its basename, because clips live in
+    different subdirs by source: assets/ for pre-made, clips/ for generated,
+    uploads/ for user files.
+    """
+    if not url:
+        return None
+    rel = url.lstrip("/")
+    if rel.startswith("static/"):
+        rel = rel[len("static/"):]
+    return os.path.join(static_root, *rel.split("/"))
+
+
 def _narration_ms(segment) -> int:
     if segment is None or not getattr(segment, "audio_url", None):
         return 0
@@ -46,8 +61,11 @@ def _narration_ms(segment) -> int:
     return max(0, end - start)
 
 
-def compute_timeline(clips, segments, clip_dir: str, audio_dir: str) -> List[Beat]:
+def compute_timeline(clips, segments, static_root: str, audio_dir: str) -> List[Beat]:
     """Lay clips end to end, pairing each with its segment's narration.
+
+    `static_root` is the served static directory; clip URLs resolve beneath it.
+    `audio_dir` is flat (tts_service.output_dir), so segment audio joins by basename.
 
     Pure: no ffmpeg, no DB, no filesystem access beyond joining paths.
     """
@@ -80,7 +98,7 @@ def compute_timeline(clips, segments, clip_dir: str, audio_dir: str) -> List[Bea
         window_ms = max(clip_ms, audio_ms)
 
         beats.append(Beat(
-            clip_path=_basename_join(clip_dir, clip.video_url),
+            clip_path=_static_join(static_root, clip.video_url),
             audio_path=_basename_join(audio_dir, getattr(segment, "audio_url", None)),
             text=(getattr(segment, "text", "") or "").strip(),
             start_ms=cursor,
@@ -252,3 +270,52 @@ def assemble(beats: List[Beat], out_path: str, style: Optional[dict] = None,
     finally:
         if temp_created:
             shutil.rmtree(work_dir, ignore_errors=True)
+
+
+def static_root() -> str:
+    """Mirrors the static mount in main.py."""
+    from app.core.config import settings as app_settings
+    base = app_settings.STATIC_AUDIO_DIR
+    return os.path.dirname(base) if base else os.path.join(os.getcwd(), "static")
+
+
+async def assemble_project(db, project_id) -> str:
+    """Build the animatic for a project and record it on video_brief.
+
+    Returns the served URL of the assembled MP4.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.project import Project
+    from app.models.script_segment import ScriptSegment
+    from app.models.video_clip import VideoClip
+    from app.services.tts_engine import tts_service
+
+    stmt = select(Project).where(Project.id == project_id).options(
+        selectinload(Project.segments), selectinload(Project.video_clips)
+    )
+    project = (await db.execute(stmt)).scalars().first()
+    if project is None:
+        raise ValueError(f"Project {project_id} not found")
+
+    root = static_root()
+    beats = compute_timeline(
+        project.video_clips, project.segments, root, tts_service.output_dir
+    )
+    if not beats:
+        raise ValueError("No ready clips to assemble.")
+
+    missing = [b.clip_path for b in beats if not os.path.exists(b.clip_path)]
+    if missing:
+        raise ValueError(f"Clip files missing on disk: {missing}")
+
+    filename = f"animatic_{project_id}.mp4"
+    out_path = os.path.join(root, "video", filename)
+    assemble(beats, out_path, project.subtitle_style or {})
+
+    url = f"/static/video/{filename}"
+    brief = dict(project.video_brief or {})
+    brief["video_master_url"] = url
+    project.video_brief = brief
+    await db.commit()
+    return url
