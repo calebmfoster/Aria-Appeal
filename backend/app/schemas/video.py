@@ -42,3 +42,10 @@ class SubtitleStyle(BaseModel):
     font_size: int = 36
     position: Literal["bottom", "top", "center"] = "bottom"
     color: str = "FFFFFF"
+
+
+class VideoClipsResponse(BaseModel):
+    """Everything the studio's Video tab needs in one read."""
+    clips: list[VideoClipRead] = []
+    video_brief: Optional[dict] = None
+    subtitle_style: Optional[dict] = None

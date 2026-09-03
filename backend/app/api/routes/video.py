@@ -11,6 +11,7 @@ from app.db.session import SessionLocal
 from app.models.project import Project
 from app.models.user import User
 from app.models.video_clip import VideoClipStatus
+from app.schemas.video import VideoClipsResponse
 from app.services.video.assembly import assemble_project
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,22 @@ async def _get_owned_project(db: AsyncSession, project_id: uuid.UUID, user: User
     if project is None or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.get("/{project_id}/video/clips", response_model=VideoClipsResponse)
+async def list_video_clips(
+    project_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Clips in running order, plus the project-level visual direction."""
+    project = await _get_owned_project(db, project_id, current_user)
+    clips = sorted(project.video_clips or [], key=lambda c: c.sequence_order)
+    return VideoClipsResponse(
+        clips=clips,
+        video_brief=project.video_brief,
+        subtitle_style=project.subtitle_style,
+    )
 
 
 @router.post("/{project_id}/video/export")
