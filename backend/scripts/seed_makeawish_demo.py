@@ -33,6 +33,7 @@ from app.models.script_segment import ScriptSegment
 from app.models.video_clip import VideoClip, VideoSourceType, VideoClipStatus
 
 PROJECT_TITLE = "Make-A-Wish (Demo)"
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "static" / "video" / "assets"
 
 # Only Aiden and Ryan are native-English presets — see Open_Issues.md. A warm female
 # narrator would need a cloned voice profile; set VOICE_PROFILE_ID below if you have one.
@@ -52,49 +53,54 @@ CHARACTER_SHEET = (
     "facial close-ups, where generated video drifts most."
 )
 
-# (narration text, emotion, shot prompt)
+# Narration is cut to fit the ACTUAL generated clips, which total 24s — Flow's per-clip
+# limits made every shot shorter than the 8s the script was originally written for.
+# Budgets come from Aiden's measured rate of ~3 words/sec; each line is written a little
+# UNDER its window, because narration overrunning means the picture runs out.
+#
+# (narration text, emotion, shot prompt, clip start ms, clip end ms)
 SEGMENTS = [
     (
-        "When you're eight years old, and you've spent four months inside the same room, "
-        "the sky starts to feel very far away.",
+        "Four months in one room. When you're eight, the sky feels far away.",
         "reflective",
         "A small hospital room at dawn. Maya sits cross-legged on the bed in her cardboard "
         "space helmet, drawing stars on the fogged window with one finger. Slow push in.",
+        0, 5000,
     ),
     (
-        "But Maya had a wish. Not to be better someday. To be an astronaut now, this year, "
-        "while it still felt possible.",
+        "Maya had a wish. To be an astronaut.",
         "hopeful",
         "The room dissolves around her into a hand-drawn starfield. She floats, scarf "
         "trailing behind her, reaching toward a distant planet. Slow drift upward.",
+        5000, 8000,
     ),
     (
-        "So we took her to the space center. Doors she had only ever seen in books opened, "
-        "and she walked straight through them.",
+        "So we took her to the space center. The doors opened.",
         "warm",
         "Daylight. Maya walks through the tall glass doors of a space center, helmet under "
         "one arm, looking up at a full-size rocket model. Wide, low angle.",
+        8000, 12000,
     ),
     (
-        "She flew a launch simulation. Hands steady on the controls. For a few minutes, "
-        "Maya wasn't a patient. She was a pilot.",
+        "Maya wasn't a patient anymore. She was a pilot.",
         "uplifting",
         "Maya in a launch simulator seat, helmet on, hands on the controls. Warm light "
         "washes over her as the screens glow. Slow orbit around the seat.",
+        12000, 15400,
     ),
     (
-        "Wishes aren't a distraction from treatment. Families tell us they are the moment "
-        "hope turns into something a child can hold onto.",
+        "A wish is when hope becomes something you can hold.",
         "sincere",
         "Maya outside at golden hour, arms wide, scarf streaming behind her, spinning. "
         "Adults out of focus behind her, laughing. Handheld warmth.",
+        15400, 19400,
     ),
     (
-        "There is another child waiting for their wish right now. Your gift is what reaches "
-        "them. Please give today.",
+        "Another child is waiting. Your gift reaches them today.",
         "urgent",
         "The yellow scarf hangs on a hook by the hospital window, the bed neatly made, "
         "morning light filling the empty room. Static, slow fade.",
+        19400, 24000,
     ),
 ]
 
@@ -137,7 +143,7 @@ async def destroy(db, project: Project) -> None:
     await db.commit()
 
 
-async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
+async def seed(email: str | None, reset: bool, with_audio: bool, attach_clips: bool) -> None:
     async with SessionLocal() as db:
         user = await pick_user(db, email)
         existing = await find_existing(db, user.id)
@@ -177,7 +183,7 @@ async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
         db.add(project)
         await db.flush()
 
-        for i, (text, emotion, shot) in enumerate(SEGMENTS):
+        for i, (text, emotion, shot, _start, _end) in enumerate(SEGMENTS):
             db.add(ScriptSegment(
                 project_id=project.id,
                 text=text,
@@ -195,14 +201,25 @@ async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
         ).order_by(ScriptSegment.sequence_order)
         segments = (await db.execute(stmt)).scalars().all()
 
-        for seg, (_, _, shot) in zip(segments, SEGMENTS):
+        attached = 0
+        for i, (seg, (_, _, shot, start_ms, end_ms)) in enumerate(zip(segments, SEGMENTS), start=1):
+            asset = f"maya_{i:02d}.mp4"
+            have_asset = attach_clips and (ASSETS_DIR / asset).exists()
+            if have_asset:
+                attached += 1
             db.add(VideoClip(
                 project_id=project.id,
                 segment_id=seg.id,
                 sequence_order=seg.sequence_order,
-                source_type=VideoSourceType.GENERATED,
-                status=VideoClipStatus.PENDING,
+                source_type=VideoSourceType.ASSET if have_asset else VideoSourceType.GENERATED,
+                status=VideoClipStatus.READY if have_asset else VideoClipStatus.PENDING,
+                video_url=f"/static/video/assets/{asset}" if have_asset else None,
                 prompt=shot,
+                # Timeline positions from the real generated clips, so assembly has
+                # ground truth to validate against before the editor exists.
+                timeline_start_ms=start_ms,
+                timeline_end_ms=end_ms,
+                duration_ms=end_ms - start_ms,
             ))
         await db.commit()
 
@@ -210,7 +227,7 @@ async def seed(email: str | None, reset: bool, with_audio: bool) -> None:
         print(f"  user       : {user.email}")
         print(f"  project_id : {project.id}")
         print(f"  segments   : {len(segments)} (narration, no audio yet)")
-        print(f"  clips      : {len(SEGMENTS)} pending, with shot prompts")
+        print(f"  clips      : {len(SEGMENTS)} total, {attached} attached from assets")
         print(f"\n  studio     : http://localhost:3000/studio/{project.id}")
         print("\nMaya is FICTIONAL — an illustrative composite, not a real wish recipient.")
         print("The copy contains no statistics by design; add real figures if you want numbers.")
@@ -236,12 +253,14 @@ def main() -> None:
     ap.add_argument("--list-users", action="store_true", help="List users and exit.")
     ap.add_argument("--reset", action="store_true", help="Delete and rebuild if it exists.")
     ap.add_argument("--with-audio", action="store_true", help="Also run the TTS pipeline.")
+    ap.add_argument("--attach-clips", action="store_true",
+                    help="Wire maya_01..06.mp4 from static/video/assets in as READY clips.")
     args = ap.parse_args()
 
     if args.list_users:
         asyncio.run(_list_only())
         return
-    asyncio.run(seed(args.user_email, args.reset, args.with_audio))
+    asyncio.run(seed(args.user_email, args.reset, args.with_audio, args.attach_clips))
 
 
 async def _list_only() -> None:

@@ -50,21 +50,60 @@ Keep her at medium-to-wide framing; avoid tight facial close-ups.
 
 ## Six shots
 
-Arc: confinement → imagination → wish granted → joy → resonance → ask. Roughly 8s each, ~45s total.
+Arc: confinement → imagination → wish granted → joy → resonance → ask.
 
-| # | Narration | Emotion | Shot prompt |
-|---|---|---|---|
-| 1 | When you're eight years old, and you've spent four months inside the same room, the sky starts to feel very far away. | reflective | A small hospital room at dawn. Maya sits cross-legged on the bed in her cardboard space helmet, drawing stars on the fogged window with one finger. Slow push in. |
-| 2 | But Maya had a wish. Not to be better someday. To be an astronaut now, this year, while it still felt possible. | hopeful | The room dissolves around her into a hand-drawn starfield. She floats, scarf trailing behind her, reaching toward a distant planet. Slow drift upward. |
-| 3 | So we took her to the space center. Doors she had only ever seen in books opened, and she walked straight through them. | warm | Daylight. Maya walks through the tall glass doors of a space center, helmet under one arm, looking up at a full-size rocket model. Wide, low angle. |
-| 4 | She flew a launch simulation. Hands steady on the controls. For a few minutes, Maya wasn't a patient. She was a pilot. | uplifting | Maya in a launch simulator seat, helmet on, hands on the controls. Warm light washes over her as the screens glow. Slow orbit around the seat. |
-| 5 | Wishes aren't a distraction from treatment. Families tell us they are the moment hope turns into something a child can hold onto. | sincere | Maya outside at golden hour, arms wide, scarf streaming behind her, spinning. Adults out of focus behind her, laughing. Handheld warmth. |
-| 6 | There is another child waiting for their wish right now. Your gift is what reaches them. Please give today. | urgent | The yellow scarf hangs on a hook by the hospital window, the bed neatly made, morning light filling the empty room. Static, slow fade. |
+**Narration was cut roughly in half after the footage came back.** Flow's per-clip limits produced a
+23.85s film, not the ~45s the script was written for, so every line is rewritten to fit its actual
+scene window. Measured against Aiden, all six now fit with 2.95s of total slack.
+
+| # | Window | Narration | Read | Emotion | Shot prompt |
+|---|---|---|---|---|---|
+| 1 | 0–5.0s | Four months in one room. When you're eight, the sky feels far away. | 4.8s | reflective | A small hospital room at dawn. Maya sits cross-legged on the bed in her cardboard space helmet, drawing stars on the fogged window with one finger. Slow push in. |
+| 2 | 5.0–8.0s | Maya had a wish. To be an astronaut. | 2.7s | hopeful | The room dissolves around her into a hand-drawn starfield. She floats, scarf trailing behind her, reaching toward a distant planet. Slow drift upward. |
+| 3 | 8.0–12.0s | So we took her to the space center. The doors opened. | 2.8s | warm | Daylight. Maya walks through the tall glass doors of a space center, helmet under one arm, looking up at a full-size rocket model. Wide, low angle. |
+| 4 | 12.0–15.4s | Maya wasn't a patient anymore. She was a pilot. | 3.1s | uplifting | Maya in a launch simulator seat, helmet on, hands on the controls. Warm light washes over her as the screens glow. Slow orbit around the seat. |
+| 5 | 15.4–19.4s | A wish is when hope becomes something you can hold. | 3.2s | sincere | Maya outside at golden hour, arms wide, scarf streaming behind her, spinning. Adults out of focus behind her, laughing. Handheld warmth. |
+| 6 | 19.4–24.0s | Another child is waiting. Your gift reaches them today. | 4.2s | urgent | The yellow scarf hangs on a hook by the hospital window, the bed neatly made, morning light filling the empty room. Static, slow fade. |
 
 Shot 6 carries the ask emotionally; the narration does the literal work. Medical context stays
 implied throughout — never depicted.
 
+### Writing to a time budget with Aiden
+
+Aiden's pace is **not** a stable words-per-second — it is driven by sentence breaks, because each
+period buys a pause. Measured on this script: scene 3 ran 11 words in 2.9s (3.8 w/s) while the first
+cut of scene 6 took 13 words in 5.7s (2.3 w/s), purely because scene 6 had three sentences. When a
+line must fit a tight window, **join clauses with commas rather than splitting into sentences** —
+that saves more time than deleting words.
+
+### OPEN ISSUE — scene 6 reads as a death
+
+An empty hospital bed with the child's scarf left behind is ambiguous, and a viewer can read it as
+Maya having died. For an organization serving children with critical illnesses, that is a real risk
+and the narration does not fully mitigate it — the picture carries more than the words. Fixes, in
+order of preference:
+
+1. Regenerate with Maya visibly leaving — walking toward a bright doorway, scarf on, empty bed
+   behind her. Keeps the structure, removes the reading.
+2. End on scene 5 (spinning in the field) and place the ask there. Removes the risk entirely.
+3. Add a drawing taped to the window — a sign of a life that continued.
+
+Unresolved as of 2026-09-02. Costs one Flow credit to fix.
+
 ---
+
+## Source footage — NOT IN GIT
+
+`backend/static/video/` is gitignored, so the demo clips exist **only on this machine**. Back them
+up somewhere before demo day; losing them means regenerating six shots on daily-limited credits.
+
+Current state: the delivered pitch film (`MAW pitch.mp4`, 23.85s, 1280x720, ~24fps) was split at the
+scene boundaries into `backend/static/video/assets/maya_01.mp4` … `maya_06.mp4`, audio stripped.
+`--attach-clips` wires those onto the seeded clip rows as `ASSET` / `READY`.
+
+Note the source is **720p**, while `ffmpeg_utils.TARGET_W/H` normalizes to 1920x1080 — that would
+upscale and soften every frame for no gain. Since all demo material is 720p, drop the target to
+1280x720 when Plan 4 lands.
 
 ## Producing the clips
 
