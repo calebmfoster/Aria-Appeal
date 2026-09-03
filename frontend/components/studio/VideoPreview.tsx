@@ -38,17 +38,18 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ exportState, onAssemble }) 
     const positioned = useMemo(() => withPositions(videoClips), [videoClips]);
 
     // Mirrors the WaveformVisualizer unmount fix: leaving the studio, or flipping
-    // to the Audio tab (which unmounts this component), must stop the audio. pause()
-    // alone can leave a buffered stream running, so the source is unloaded too.
+    // to the Audio tab (which unmounts this component), must stop the audio.
+    //
+    // pause() only — do NOT strip the src attribute. StrictMode's dev double-mount
+    // runs this cleanup against the same DOM node React reuses on the second mount,
+    // and React won't re-set an attribute it believes is unchanged, so the player
+    // comes back permanently sourceless. Unlike WaveSurfer's WebAudio backend, a
+    // media element stops dead on pause, so this is sufficient.
     useEffect(() => {
         const el = videoRef.current;
         return () => {
             if (!el) return;
             try { el.pause(); } catch { /* already stopped */ }
-            try {
-                el.removeAttribute('src');
-                el.load();
-            } catch { /* teardown races a pending load; nothing to recover */ }
         };
     }, []);
 

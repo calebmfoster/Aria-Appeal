@@ -226,8 +226,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
                 saveStatus: 'idle',
                 // Absent means audio, so campaigns created before the video work
                 // render with no tab bar at all.
+                //
+                // activeTab is deliberately NOT reset here: this runs again on
+                // every refetch, and resetting would snap the user back to Audio
+                // the moment they picked Video. The studio derives an effective
+                // tab from `medium`, so a stale 'video' can never leak into an
+                // audio-only campaign.
                 medium: project.target_audience?.medium === 'video' ? 'video' : 'audio',
-                activeTab: 'audio',
                 activeClipId: null,
             });
         } catch (error) {

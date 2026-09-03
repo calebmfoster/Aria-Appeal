@@ -24,6 +24,9 @@ export default function StudioPage() {
     const { data: session, status } = useSession();
     const { fetchProjectData, audioUrl, script, generatingSegments, medium, activeTab } = useStudioStore();
     const videoExport = useVideoExport(projectId, session?.accessToken);
+    // An audio-only campaign can never show video columns, even if activeTab is
+    // left over from a video campaign viewed earlier in the same session.
+    const tab = medium === 'video' ? activeTab : 'audio';
     const [isGenerating, setIsGenerating] = useState(false);
     const [isLoadingProject, setIsLoadingProject] = useState(true);
     const [isAwaitingAudio, setIsAwaitingAudio] = useState(false);
@@ -261,7 +264,7 @@ export default function StudioPage() {
                     >
                         <Keyboard className="h-4 w-4" />
                     </button>
-                    {activeTab === 'video' ? (
+                    {tab === 'video' ? (
                         <button
                             onClick={videoExport.assemble}
                             disabled={videoExport.state.status === 'running'}
@@ -326,14 +329,14 @@ export default function StudioPage() {
                 <div className="flex flex-1 overflow-hidden">
                     {/* Left Column - 30% */}
                     <div className="w-[30%] h-full flex flex-col border-r border-gray-200">
-                        {activeTab === 'video' ? <VideoSegmentList /> : <ScriptEditor />}
+                        {tab === 'video' ? <VideoSegmentList /> : <ScriptEditor />}
                     </div>
 
                     {/* Center Column - 45%. The two players are mutually exclusive on
                         purpose: switching tabs unmounts the other one, which is what
                         makes its teardown effect stop playback. Do not hide with CSS. */}
                     <div className="w-[45%] h-full flex flex-col relative bg-white">
-                        {activeTab === 'video' ? (
+                        {tab === 'video' ? (
                             <VideoPreview exportState={videoExport.state} onAssemble={videoExport.assemble} />
                         ) : (
                             <div className="flex-1 p-6 flex items-center justify-center">
@@ -344,7 +347,7 @@ export default function StudioPage() {
 
                     {/* Right Column - 25% */}
                     <div className="w-[25%] h-full border-l border-gray-200 bg-white">
-                        {activeTab === 'video' ? <VideoInspector /> : <InspectorPanel />}
+                        {tab === 'video' ? <VideoInspector /> : <InspectorPanel />}
                     </div>
                 </div>
                 </>
