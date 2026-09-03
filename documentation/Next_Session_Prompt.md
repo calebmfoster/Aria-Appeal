@@ -1,44 +1,78 @@
-# Next Session Prompt: Video Previsualization — Vertical Slice (Phase 1)
+# Next Session Prompt: Video Previsualization — Plan 3 (Orchestration)
 
 Read `CLAUDE.md`, `documentation/Project_Progress.md`, `documentation/Open_Issues.md`, and
 `documentation/Product_Roadmap.md` (Tier V) for full context.
 
 ---
 
-## State After Session 12 (2026-06-26)
+## HARD DEADLINE
 
-- **Client meeting:** strong reception. Main ask: add video to the appeal + a studio editor
-  to tweak it. Reframed as a **previsualization / animatic** tool for pitching clients.
-- **Bug fixed:** studio audio no longer keeps playing after navigating away
-  (`WaveformVisualizer.tsx` teardown now stops playback + resets `isPlaying`).
-- **Design in progress:** the video previsualization spec is being authored under
-  `docs/superpowers/specs/`. Implementation has **not** started — do not build until the
-  spec is approved and an implementation plan exists.
+**Client demo to the CTO, CAO and CIO — week of 2026-09-14.** Roughly ten working days from
+2026-09-02.
+
+The audience is a technical/administrative buying committee, not a creative one. They will probe
+architecture, vendor lock-in and cost model more than aesthetics, and have signalled they may want a
+different video provider. Two rules follow:
+
+1. **Build the demo on Flow-sourced / uploaded clips, never on live Veo.** No paid API dependency, no
+   live generation call in the room. The `VideoProvider` abstraction means this costs us nothing
+   architecturally — and provider-swappability is a selling point to say out loud.
+2. **Pre-generate everything before the meeting.** Nothing generated live on stage.
+
+---
+
+## State after Session 13 (2026-09-02)
+
+**Plan 2 (video engine) is fully coded** on `feat/video-previs` — 31 video tests pass.
+
+- `VideoProvider` ABC, `AssetVideoProvider`, `GeminiVeoProvider`, `LocalVideoProvider`, factory.
+- ffmpeg utils (normalize / probe / extract-last-frame); ffmpeg 8.1.2 is installed and on PATH.
+- Launcher Settings persists `gemini_api_key`, `veo_model`, `video_provider`.
+- Gemini config hardened beyond the original plan: `generate_audio=False`, `resolution=1080p`,
+  `person_generation=allow_adult`, `negative_prompt`, and `reference_images` for character
+  consistency. Poll deadline uses a monotonic clock.
+
+**Veo API access is unconfirmed.** There is no free Veo tier on the Gemini API — it needs billing
+enabled. A free read-only probe script exists to check whether a key can see Veo models without
+spending anything. This is explicitly *not* on the demo critical path.
+
+**Outstanding manual checkpoints from Plan 2:** CP3 (asset resolve), CP6 (launcher key UI), CP4 /
+CP4b (real Veo calls — optional, costs money). See
+`docs/superpowers/plans/2026-06-27-video-previs-02-engine-MANUAL-TESTS.md`.
 
 ---
 
 ## NEXT PRIORITIES
 
-### Priority 1 — Video Previsualization, Phase 1 (Vertical Demo Slice)
+### Priority 1 — Plan 3: Orchestration
 
-Build per the approved spec. Phasing within the slice (see spec for detail):
+`docs/superpowers/plans/2026-09-02-video-previs-03-orchestration.md` — written, not started.
+Art-direction LLM pass, clip provisioning, normalize-on-ingest, upload/asset endpoints,
+provider-agnostic sequential generation with tail chaining, editor CRUD. Two manual checkpoints.
 
-1. **Prerequisites:** install `ffmpeg`/`ffprobe`; obtain a Gemini API key; add `static/video/`.
-2. **Data model:** `videoclip` table + `Project.video_brief` / `Project.subtitle_style` JSON
-   columns + Alembic migration.
-3. **`VideoProvider` abstraction:** `asset` + live Gemini (Veo) providers behind one
-   interface; wired through the existing settings/provider-toggle pattern.
-4. **Generation:** extend campaign generation to emit per-segment video prompts + a
-   campaign visual bible (style + character sheet); tail-frame chaining for consistency.
-5. **ffmpeg assembly:** video track + master narration + burned-in captions → MP4.
-6. **Studio Audio|Video tabs:** minimal editor (reorder / replace / trim / subtitle toggle).
+### Priority 2 — Plan 4: ffmpeg assembly (NOT YET WRITTEN)
 
-### Priority 2 — Outstanding Tier 3 Gaps (as capacity allows)
+The demo's payoff: fit clips to narration beats (freeze-last-frame padding), concat, mux master
+narration, burn ASS subtitles, output MP4. Write this plan after Plan 3's Checkpoint A proves a real
+Flow clip survives ingest.
 
-- Forgot-password / reset flow (`auth.py`, new `/reset-password` page)
+### Priority 3 — Plan 5: Audio | Video tabbed studio (NOT YET WRITTEN)
+
+Video preview, clip inspector, timeline strip with reorder/trim/replace, subtitle toggle.
+
+### Schedule risk
+
+Plans 3, 4 and 5 in ten working days is tight, and **Plan 5 (the UI) is the piece most likely to
+slip.** Mitigation: Plan 4 produces a standalone MP4 through the API alone. If the Video tab isn't
+ready, the demo still works — play the assembled MP4 next to the existing, fully-featured audio
+studio and present the editor as the next increment. Protect the assembly milestone over the UI.
+
+### Deferred — Tier 3 gaps (only if capacity appears, which it won't before the demo)
+
+- Forgot-password / reset flow
 - Per-segment mini waveforms in `ScriptEditor.tsx`
 - Segment split
-- "Regenerate All" arc-continuity fix (see `Open_Issues.md` — currently bypasses chaining)
+- "Regenerate All" arc-continuity fix (see `Open_Issues.md`)
 
 ---
 
