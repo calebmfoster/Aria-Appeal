@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from app.services.video import ffmpeg_utils
 
@@ -30,6 +30,7 @@ class Beat:
     pad_ms: int
     trim_start_ms: int
     trim_end_ms: Optional[int]
+    clip_id: Any = None
 
 
 def _basename_join(directory: str, url: Optional[str]) -> Optional[str]:
@@ -107,10 +108,28 @@ def compute_timeline(clips, segments, static_root: str, audio_dir: str) -> List[
             pad_ms=max(0, window_ms - clip_ms),
             trim_start_ms=trim_start,
             trim_end_ms=trim_end,
+            clip_id=getattr(clip, "id", None),
         ))
         cursor += window_ms
 
     return beats
+
+
+def apply_timeline_positions(clips, beats: List[Beat]) -> None:
+    """Stamp each clip with where it lands on the assembled timeline.
+
+    Clips that produced no beat (no video_url) are reset to None rather than
+    left holding a stale position from a previous assembly.
+    """
+    by_id = {b.clip_id: b for b in beats if b.clip_id is not None}
+    for clip in clips:
+        beat = by_id.get(getattr(clip, "id", None))
+        if beat is None:
+            clip.timeline_start_ms = None
+            clip.timeline_end_ms = None
+        else:
+            clip.timeline_start_ms = beat.start_ms
+            clip.timeline_end_ms = beat.start_ms + beat.window_ms
 
 
 def _ass_timestamp(ms: int) -> str:
@@ -314,6 +333,7 @@ async def assemble_project(db, project_id) -> str:
     assemble(beats, out_path, project.subtitle_style or {})
 
     url = f"/static/video/{filename}"
+    apply_timeline_positions(project.video_clips, beats)
     brief = dict(project.video_brief or {})
     brief["video_master_url"] = url
     project.video_brief = brief

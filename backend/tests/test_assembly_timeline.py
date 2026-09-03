@@ -155,3 +155,73 @@ def test_missing_duration_falls_back_to_narration():
     segs = [_segment(0, "x", "/static/audio/a.wav", 0, 2500)]
     beats = compute_timeline(clips, segs, CLIP_DIR, AUDIO_DIR)
     assert beats[0].window_ms == 2500
+
+
+def test_compute_timeline_records_clip_id():
+    """Beats carry the id of the clip they came from, so assemble_project can
+    write timeline positions back without re-deriving the filter predicate."""
+    from app.services.video.assembly import compute_timeline
+
+    class _C:
+        def __init__(self, cid, order, url, duration):
+            self.id = cid
+            self.sequence_order = order
+            self.video_url = url
+            self.duration_ms = duration
+            self.trim_start_ms = None
+            self.trim_end_ms = None
+            self.segment_id = None
+
+    clips = [
+        _C("c-b", 1, "/static/video/assets/b.mp4", 3000),
+        _C("c-a", 0, "/static/video/assets/a.mp4", 2000),
+        _C("c-skip", 2, None, 4000),
+    ]
+
+    beats = compute_timeline(clips, [], "/root", "/audio")
+
+    assert [b.clip_id for b in beats] == ["c-a", "c-b"]
+    assert [b.start_ms for b in beats] == [0, 2000]
+    assert [b.window_ms for b in beats] == [2000, 3000]
+
+
+def test_apply_timeline_positions_writes_back_to_clips():
+    """assemble_project uses this to stamp each clip's place on the timeline."""
+    from app.services.video.assembly import Beat, apply_timeline_positions
+
+    class _C:
+        def __init__(self, cid):
+            self.id = cid
+            self.timeline_start_ms = None
+            self.timeline_end_ms = None
+
+    a, b = _C("c-a"), _C("c-b")
+    beats = [
+        Beat("p1", None, "", 0, 2000, 0, 0, 0, None, clip_id="c-a"),
+        Beat("p2", None, "", 2000, 3000, 0, 0, 0, None, clip_id="c-b"),
+    ]
+
+    apply_timeline_positions([a, b], beats)
+
+    assert (a.timeline_start_ms, a.timeline_end_ms) == (0, 2000)
+    assert (b.timeline_start_ms, b.timeline_end_ms) == (2000, 5000)
+
+
+def test_apply_timeline_positions_clears_clips_with_no_beat():
+    """A clip with no video_url produces no beat; it must be reset rather than
+    left holding a stale position from a previous assembly."""
+    from app.services.video.assembly import Beat, apply_timeline_positions
+
+    class _C:
+        def __init__(self, cid):
+            self.id = cid
+            self.timeline_start_ms = 999
+            self.timeline_end_ms = 999
+
+    kept, skipped = _C("c-a"), _C("c-skip")
+    beats = [Beat("p1", None, "", 0, 2000, 0, 0, 0, None, clip_id="c-a")]
+
+    apply_timeline_positions([kept, skipped], beats)
+
+    assert (kept.timeline_start_ms, kept.timeline_end_ms) == (0, 2000)
+    assert (skipped.timeline_start_ms, skipped.timeline_end_ms) == (None, None)
