@@ -69,11 +69,26 @@
   - **Preset ("emotional intelligence") voices have no preview at all.** Presets have no
     `reference_audio_path`, so `preview_url` resolves to `None`
     (`voice_profile.py:29`) and `VoiceList.tsx:195` hides the play button entirely.
-  **Fix direction:** synthesize a fixed preview line ("Welcome to Aria Appeal") through the normal
-  TTS path for both voice types and cache it to `static/audio/preview_{profile_id}.wav` (clones) and
+  **Fix direction:** synthesize a fixed preview line through the normal TTS path for both voice
+  types and cache it to `static/audio/preview_{profile_id}.wav` (clones) and
   `preview_preset_{speaker}.wav` (presets, shared across users). Generate lazily on first request,
   or at profile-creation time for clones. Point `preview_url` at the cached file rather than the
-  upload. Note the preset list is English-only in practice — see the native-languages entry above.
+  upload.
+
+- **Language-label the preset picker — reframe the trap as multi-language support (2026-09-02).**
+  The preset list is majority non-English (see the native-languages entry above), which is currently
+  an unlabelled trap. Decision: label rather than hide, and present it as a feature — the voice layer
+  natively covers English, Chinese, Japanese and Korean, which is genuinely useful for a nonprofit
+  serving diverse communities.
+  - Group the picker by language with English first and Aiden/Ryan as the defaults.
+  - **Preview each voice in its own native language**, or the label promises quality the audio
+    contradicts — an English sample from Vivian is exactly the bad impression the labelling is meant
+    to prevent. Suggested lines: English "Welcome to Aria Appeal"; Chinese "欢迎使用 Aria Appeal";
+    Japanese "Aria Appeal へようこそ"; Korean "Aria Appeal에 오신 것을 환영합니다". Show the English
+    gloss as caption text next to non-English voices so the greeting still reads as consistent.
+  - **Scope honesty:** this makes the *voice* layer multi-language. Script generation, the studio UI,
+    and subtitle rendering are still English-only. Say "multi-language narration" in the room, not
+    "multi-language product" — the gap is easy to probe and cheap to be straight about.
 
 ## Testing (noted 2026-07-27)
 
