@@ -8,7 +8,7 @@ from app.api.deps import limiter
 from app.models.user import User
 from app.models.project import Project, ProjectStatus
 from app.models.script_segment import ScriptSegment
-from app.schemas.project import ProjectCreate, ProjectRead, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse, SegmentAddRequest, SegmentReorderBody
+from app.schemas.project import ProjectCreate, ProjectRead, ProjectSettingsUpdate, ScriptSegmentUpdate, ScriptSegmentRead, SegmentRewriteRequest, SegmentRewriteResponse, SegmentAddRequest, SegmentReorderBody
 from app.services.llm import LLMService
 from app.core.system_config import config_manager
 from app.services.mastering_service import mastering_service
@@ -169,6 +169,7 @@ async def create_project(
             "organization_name": project_in.organization_name,
             "script_length": project_in.script_length,
             "messaging_strategy": project_in.messaging_strategy,
+            "medium": project_in.medium or "audio",
         },
         status=ProjectStatus.GENERATED
     )
@@ -329,6 +330,38 @@ async def get_project(
     # Sort segments by sequence_order before returning
     project.segments.sort(key=lambda s: s.sequence_order)
     return project
+
+@router.patch("/{project_id}", response_model=ProjectRead)
+async def update_project_settings(
+    project_id: uuid.UUID,
+    body: ProjectSettingsUpdate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    """Update project-level settings (campaign medium, subtitle style)."""
+    stmt = (
+        select(Project)
+        .where(Project.id == project_id, Project.user_id == current_user.id)
+        .options(selectinload(Project.segments))
+    )
+    project = (await db.execute(stmt)).scalars().first()
+    if not project or project.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if body.medium is not None:
+        # target_audience is a JSON column — replace the dict. Mutating in place
+        # does not mark the attribute dirty and the write is silently dropped.
+        audience = dict(project.target_audience or {})
+        audience["medium"] = body.medium
+        project.target_audience = audience
+
+    if body.subtitle_style is not None:
+        project.subtitle_style = dict(body.subtitle_style)
+
+    await db.commit()
+    project.segments.sort(key=lambda s: s.sequence_order)
+    return project
+
 
 @router.post("/{project_id}/export")
 async def export_project(

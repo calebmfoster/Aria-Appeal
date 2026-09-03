@@ -175,6 +175,7 @@ async def seed(email: str | None, reset: bool, with_audio: bool, attach_clips: b
                 "script_length": "45s",
                 "messaging_strategy": "Single-story arc: confinement, imagination, wish "
                                       "granted, joy, ask. Hope-forward, never pity-forward.",
+                "medium": "video",
             },
             status=ProjectStatus.GENERATED,
             video_brief={"style_prompt": STYLE_PROMPT, "character_sheet": CHARACTER_SHEET},
