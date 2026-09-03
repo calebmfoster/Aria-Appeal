@@ -1,12 +1,101 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-09-02
-**Phase**: Phase X — Video Previsualization; Plans 2 and 4 built, demo animatic assembled
+**Date**: 2026-09-03
+**Phase**: Phase X — Video Previsualization; Plan 5 built, the studio has a working Video tab
 
 > Note: entries below are newest-first at the top of each phase but the file as a whole is
 > not strictly chronological. Session 11 (2026-06-08) is recorded lower down. Some interim
 > work (launcher worktree-source dropdown, Add-Voice-Profile modal) lives in git history and
 > `CLAUDE.md` but was never written up here.
+
+## Session 14 (2026-09-03) — Plan 5: the Audio | Video studio tab, and working voice previews
+
+Two independent tracks, both complete and verified in the running app.
+
+### Plan 5 — Audio | Video studio tab
+
+Plan: `docs/superpowers/plans/2026-09-02-video-previs-05-studio-tab.md`. Scope was deliberately
+preview + export only — reorder, trim, replace and per-clip regenerate stay out, since they need
+Plan 3.
+
+- [x] **Campaign medium** at `target_audience.medium` (`"audio"` | `"video"`). Absent means audio,
+      so no migration and every existing campaign is untouched. Set at creation (a Deliverable
+      toggle in the modal) and changeable later via the new project PATCH.
+- [x] **`GET /api/v1/projects/{id}/video/clips`** — clips in `sequence_order` plus `video_brief`
+      and `subtitle_style`, so the Video tab loads in one request.
+- [x] **`PATCH /api/v1/projects/{id}`** — persists `medium` and `subtitle_style`. The spec said to
+      extend the existing project PATCH; there wasn't one, only segment PATCHes, so this is new.
+- [x] **Timeline positions are now persisted.** `VideoClip.timeline_start_ms`/`timeline_end_ms`
+      existed as columns but nothing ever wrote them — `compute_timeline` built the mapping and
+      threw it away, so the clip strip had nothing to seek to. `Beat` gained a `clip_id` and
+      `assemble_project` calls the new `apply_timeline_positions`.
+- [x] **The Video tab** reuses the existing 30/45/25 shell: shot list with poster frames, the
+      assembled animatic plus a clip strip, and a read-only clip inspector with the subtitle
+      control (labelled "applies on next assembly"). No NLE timeline, no board grid — the script
+      is already the timeline.
+- [x] **Poster frames** are muted `<video>` elements pointed at the clip URL. No backend
+      thumbnail generation.
+- [x] **Assemble / poll / swap** via `useVideoExport`, polling the existing export endpoint every
+      2s, cancelling on unmount, and keeping a previously assembled animatic playable when a
+      re-assembly fails.
+- [x] Dashboard campaign cards carry a **Video badge**.
+
+**Verified in the browser, not just in tests:** the Video tab plays the 23.87s animatic; clicking
+Scene 4 seeks to exactly 12.0s and clip-strip item 6 to 19.4s (both matching the DB); playback
+stops on tab switch and on leaving the studio; and the audio-only campaign renders with **zero**
+tab elements and the original Export/Download header.
+
+Two bugs were only findable by driving the real UI:
+- `fetchProjectData` reset `activeTab` to `'audio'`. Its effect depends on the `useSession` object
+  identity, so it re-runs constantly — picking Video snapped straight back to Audio. The reset is
+  gone; the page derives an effective tab from `medium` instead, so a stale `'video'` still cannot
+  leak into an audio-only campaign.
+- `VideoPreview`'s teardown stripped the `src` attribute. StrictMode's dev double-mount runs
+  cleanup against the DOM node React reuses on the second mount, and React won't re-set an
+  attribute it believes is unchanged — so the player came back permanently sourceless. `pause()`
+  alone stops a media element; unlike WaveSurfer's WebAudio backend it needs no unload.
+
+### Voice previews + multi-language preset labelling
+
+Plan: `docs/superpowers/plans/2026-09-02-voice-previews-multilanguage.md`.
+
+- [x] **Cloned previews no longer replay the user's raw upload.** `preview_url` was
+      `/static/voice_uploads/{file}` — the entire original recording. The "Me" profile's upload is
+      **52.8 seconds**; its preview is now a 1.56s synthesized greeting.
+- [x] **Preset voices have previews at all now.** They have no `reference_audio_path`, so
+      `preview_url` was `None` and the play button was hidden outright.
+- [x] New `voice_preview` service caches to `preview_preset_{Speaker}.wav` (shared across users)
+      and `preview_clone_{profile_id}.wav`. Generated lazily on first play, warmed in the
+      background on upload, and deleted with the profile.
+- [x] **The preset picker is language-grouped and all nine presets are back.** It had been
+      restricted to Aiden and Ryan, hiding seven working voices. Now grouped English → Chinese →
+      Japanese → Korean, English first, Aiden/Ryan the defaults.
+- [x] **Each voice previews in its own language** — an English sample from a Chinese speaker is
+      the exact bad impression the labelling prevents. English gloss shown as caption text.
+- [x] `scripts/warm_voice_previews.py` pre-generates all nine so a demo never stalls on
+      first-play synthesis. All 9 generated and verified as real speech (1.8–4.7s).
+
+**Scope honesty:** this makes the *voice* layer multi-language. Script generation, studio UI and
+subtitles remain English-only. Say "multi-language narration", not "multi-language product".
+
+### Incidental fixes
+
+- **`npm run build` had never passed on this branch.** `/login` calls `useSearchParams()` without
+  a Suspense boundary, so prerendering failed. Unrelated to the video work and untouched since the
+  initial commit; fixed because it blocked build verification.
+- **`test_rate_limiting` was order-dependent.** It assigned its `get_db` override at module import
+  time, so any other module's `dependency_overrides.clear()` wiped it and `/auth/register` hit the
+  real asyncpg pool on a closed event loop. Latent until a new test file sorted ahead of it
+  alphabetically. Now installed per test.
+
+### Test state
+
+- Backend: **5 failed, 126 passed** — the same 5 stale Celery-era / pre-refactor failures.
+  Note: run `pytest tests/`, not bare `pytest` — a stray `backend/test_celery_task.py` at the repo
+  root calls `exit(1)` at import and kills collection.
+- Frontend: **6 failed, 27 passed**. The 6 are the pre-existing stale `InspectorPanel`/`ScriptEditor`
+  tests, which mock the Zustand store but not `next-auth/react` or `next/navigation`. 26 of the
+  passes are new.
 
 ## Session 13 (2026-09-02) — Video Engine, Assembly, and the Make-A-Wish Demo Animatic
 

@@ -1,6 +1,6 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-09-02
+**Last Updated**: 2026-09-03
 
 ## Critical / Blocking
 
@@ -40,6 +40,29 @@
 - ~~**Segment Click Doesn't Navigate**~~: RESOLVED — Clicking a segment seeks the waveform to that segment's start time.
 - ~~**Redundant Preview Section Button**~~: RESOLVED — Removed Preview Sequence button from header.
 
+## Frontend — Video studio (noted 2026-09-03)
+
+- **Video tab scope is preview + export only.** Reorder, trim, replace, per-clip regenerate and
+  editable shot prompts are deliberately out — they need Plan 3's endpoints, which are written but
+  not executed. The clip inspector is read-only by design; the only control that writes is the
+  subtitle toggle/size, labelled "applies on next assembly".
+- **Never hide the two centre players with CSS.** `activeTab` swaps `VideoPreview` and
+  `WaveformVisualizer` as mutually exclusive branches on purpose: unmounting is what runs each
+  one's teardown and stops its playback. A `display:none` refactor would silently reintroduce the
+  leave-the-studio-with-audio-playing bug.
+- **Do not strip `src` in a media element's unmount cleanup.** StrictMode's dev double-mount runs
+  cleanup against the DOM node React reuses on the second mount, and React will not re-set an
+  attribute it believes is unchanged — the player comes back permanently sourceless. `pause()` is
+  sufficient for a `<video>`/`<audio>` element; only WaveSurfer's WebAudio backend needs the
+  heavier teardown.
+- **Do not reset `activeTab` inside `fetchProjectData`.** That function re-runs on every refetch
+  (its effect depends on the `useSession` object identity), so resetting snaps the user back to
+  the Audio tab mid-interaction. The studio page derives an effective tab from `medium` instead.
+- **`npm run build` was broken on this branch before 2026-09-03** — `/login` used
+  `useSearchParams()` with no Suspense boundary, so prerendering failed. Fixed. Worth knowing that
+  the production build was never exercised for a long stretch; other routes may have latent
+  prerender issues.
+
 ## Frontend — Remaining
 
 - ~~**Cloned Voice Preview Beep**~~: RESOLVED (Session 3) — TTS models now load properly, generating real speech instead of sine waves.
@@ -58,37 +81,38 @@
 - **SoX Warning**: "SoX could not be found" at startup — cosmetic, doesn't affect functionality.
 - **Setuptools Compatibility**: `pyloudnorm` requires `pkg_resources`. Fixed by pinning `setuptools<70.0.0`.
 
-## Dashboard — Voice previews (open, noted 2026-09-02)
+## Dashboard — Voice previews (RESOLVED 2026-09-03)
 
-- **Every voice preview should say "Welcome to Aria Appeal"; none of them do.** Two distinct bugs
-  behind one symptom:
-  - **Cloned voices play the raw source clip.** `preview_url` is built in
-    `app/schemas/voice_profile.py:34` as `/static/voice_uploads/{filename}` — it is literally the
-    reference audio the user uploaded for cloning, so previewing plays back their whole original
-    recording rather than a sample of the cloned voice.
-  - **Preset ("emotional intelligence") voices have no preview at all.** Presets have no
-    `reference_audio_path`, so `preview_url` resolves to `None`
-    (`voice_profile.py:29`) and `VoiceList.tsx:195` hides the play button entirely.
-  **Fix direction:** synthesize a fixed preview line through the normal TTS path for both voice
-  types and cache it to `static/audio/preview_{profile_id}.wav` (clones) and
-  `preview_preset_{speaker}.wav` (presets, shared across users). Generate lazily on first request,
-  or at profile-creation time for clones. Point `preview_url` at the cached file rather than the
-  upload.
+- ~~**Every voice preview should say "Welcome to Aria Appeal"; none of them do.**~~ RESOLVED.
+  Both bugs are fixed by `app/services/voice_preview.py`, which synthesizes a short greeting
+  through the normal TTS path and caches it to `static/audio/preview_preset_{Speaker}.wav`
+  (shared across users) and `preview_clone_{profile_id}.wav`.
+  - Cloned voices no longer replay the raw upload. For scale: the "Me" profile's uploaded
+    reference is **52.8 seconds**; its preview is now **1.56 seconds**.
+  - Preset voices have previews now. `VoiceList.tsx` shows the button unconditionally for cloned
+    profiles and generates on first click; the pickers preview the selected preset.
+  - New routes: `GET /voice-profiles/presets` (cache-only, never synthesizes, so pickers stay
+    instant), `POST /voice-profiles/presets/{speaker}/preview`, `POST /voice-profiles/{id}/preview`.
+  - Clone previews are warmed in a background task on upload and deleted with the profile.
 
-- **Language-label the preset picker — reframe the trap as multi-language support (2026-09-02).**
-  The preset list is majority non-English (see the native-languages entry above), which is currently
-  an unlabelled trap. Decision: label rather than hide, and present it as a feature — the voice layer
-  natively covers English, Chinese, Japanese and Korean, which is genuinely useful for a nonprofit
-  serving diverse communities.
-  - Group the picker by language with English first and Aiden/Ryan as the defaults.
-  - **Preview each voice in its own native language**, or the label promises quality the audio
-    contradicts — an English sample from Vivian is exactly the bad impression the labelling is meant
-    to prevent. Suggested lines: English "Welcome to Aria Appeal"; Chinese "欢迎使用 Aria Appeal";
-    Japanese "Aria Appeal へようこそ"; Korean "Aria Appeal에 오신 것을 환영합니다". Show the English
-    gloss as caption text next to non-English voices so the greeting still reads as consistent.
-  - **Scope honesty:** this makes the *voice* layer multi-language. Script generation, the studio UI,
-    and subtitle rendering are still English-only. Say "multi-language narration" in the room, not
-    "multi-language product" — the gap is easy to probe and cheap to be straight about.
+- ~~**Language-label the preset picker.**~~ RESOLVED 2026-09-03. All nine presets are exposed
+  again — the picker had been narrowed to Aiden and Ryan, which hid seven working voices. Now
+  grouped English → Chinese → Japanese → Korean, English first, Aiden/Ryan the defaults, each
+  previewing in its own language with the English gloss as caption text. The studio inspector
+  shows an amber note on non-English presets. Catalogue lives in
+  `backend/app/services/voice_presets.py` (source of truth for synthesis) mirrored by
+  `frontend/lib/voicePresets.ts` (display only); a backend test asserts the two agree with
+  `TTSService.PRESET_SPEAKERS`.
+  - **Scope honesty stands:** this makes the *voice* layer multi-language. Script generation, the
+    studio UI, and subtitle rendering are still English-only. Say "multi-language narration" in the
+    room, not "multi-language product".
+  - **Not yet listened to by a human.** All nine files are real speech (1.8–4.7s), but nobody has
+    confirmed the CJK reads are idiomatic. `Uncle_Fu` is 4.65s for the same Chinese line the other
+    Chinese presets deliver in ~1.9s — worth a listen before the demo. If a CJK preview reads
+    badly, the fix is to thread an explicit `language` argument through
+    `TTSService.generate_audio` / `_generate_preset_voice`, which currently hardcode
+    `language="Auto"`. Pre-generate everything with
+    `backend/scripts/warm_voice_previews.py`.
 
 ## Testing (noted 2026-07-27)
 
@@ -102,7 +126,25 @@
   - `test_settings.py::test_settings_api` — POSTs `llm_provider: "openai"`, which the
     `Literal["claude","local"]` on `SystemSettings` rejects with 422.
   **Fix direction**: rewrite against the current architecture or delete. Until then they mask real
-  regressions — the video work's 31 tests pass, but "5 failed" is the suite's normal state.
+  regressions — but "5 failed" is the suite's normal state. As of 2026-09-03 the full result is
+  **5 failed, 126 passed**.
+- **Run `pytest tests/`, never bare `pytest` (noted 2026-09-03)**: there is a stray
+  `backend/test_celery_task.py` at the backend root that calls `exit(1)` at import time. Bare
+  `pytest` collects it and dies with `INTERNALERROR ... SystemExit: 1` before running anything.
+  It is a leftover script, not a test. Delete it or move it under `scripts/`.
+- **5 stale FRONTEND tests fail too (noted 2026-09-03)**: `InspectorPanel.test.tsx` (4) and
+  `ScriptEditor.test.tsx` (2) mock the Zustand store but not `next-auth/react` or
+  `next/navigation`, which both components now call — so they throw on render. Pre-existing and
+  unrelated to current work; "6 failed, 27 passed" is the frontend suite's normal state. Note
+  `frontend/package.json` has **no `test` script** — run `npx jest`.
+- **Test isolation: module-level `dependency_overrides` are fragile (fixed 2026-09-03)**:
+  `test_rate_limiting.py` assigned `app.dependency_overrides[get_db]` at import time. Every
+  TestClient-based test module clears `dependency_overrides` in its teardown, so whichever sorted
+  first alphabetically wiped it, and `/auth/register` then hit the real asyncpg pool on a closed
+  event loop (`RuntimeError: Event loop is closed`). Latent for months; surfaced only when
+  `test_project_settings_route.py` sorted ahead of it. Fixed by installing the override in an
+  autouse fixture. **Any new TestClient test module should do the same** rather than assigning at
+  import time.
 - **Anthropic API key printed to pytest stdout (open, minor)**: `test_settings_api` prints the full
   settings dict, including the live `anthropic_api_key` from `config.json`. `backend/config.json`
   is gitignored, but CI logs or a pasted test run would leak the key. Redact the print when fixing
