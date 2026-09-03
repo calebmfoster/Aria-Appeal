@@ -44,19 +44,33 @@ CP4b (real Veo calls — optional, costs money). See
 
 ## NEXT PRIORITIES
 
-### Priority 1 — Plan 3: Orchestration
+> **Superseded 2026-09-02:** Plan 4 was built ahead of Plan 3 and the demo animatic exists.
+> The priorities below are re-ordered accordingly — Plan 5 (the Video tab) is now the critical
+> path, and Plan 3 is deferred because the fixture already supplies ready clips.
+
+### Priority 0 — Plan 5: Audio | Video tabbed studio (NOT YET WRITTEN)
+
+The only remaining code between here and a full demo. Video preview, clip inspector, timeline
+strip with reorder/trim/replace, subtitle toggle, and a Generate/Export button wired to
+`POST /api/v1/projects/{id}/video/export` (which exists and works). Write the plan, then execute.
+
+**If it slips, the demo still works** — play `static/video/animatic_<project_id>.mp4` directly
+beside the existing audio studio and present the editor as the next increment. Protect rehearsal
+time over UI completeness.
+
+### Priority 1 — Plan 3: Orchestration (DEFERRED)
 
 `docs/superpowers/plans/2026-09-02-video-previs-03-orchestration.md` — written, not started.
 Art-direction LLM pass, clip provisioning, normalize-on-ingest, upload/asset endpoints,
 provider-agnostic sequential generation with tail chaining, editor CRUD. Two manual checkpoints.
 
-### Priority 2 — Plan 4: ffmpeg assembly (NOT YET WRITTEN)
+### Priority 2 — Plan 4: ffmpeg assembly (DONE 2026-09-02)
 
 The demo's payoff: fit clips to narration beats (freeze-last-frame padding), concat, mux master
 narration, burn ASS subtitles, output MP4. Write this plan after Plan 3's Checkpoint A proves a real
 Flow clip survives ingest.
 
-### Priority 3 — Plan 5: Audio | Video tabbed studio (NOT YET WRITTEN)
+### Priority 3 — see Priority 0 above
 
 Video preview, clip inspector, timeline strip with reorder/trim/replace, subtitle toggle.
 
@@ -77,7 +91,7 @@ Content work, separate from the code plans. Most of it gates on nothing and shou
       six pending clips with shot prompts. Rebuild with
       `backend/scripts/seed_makeawish_demo.py --reset`.
 - [x] **Narration generated** with the Aiden preset.
-- [ ] **Generate the six Flow clips** — `documentation/Demo_MakeAWish_Brief.md` has paste-ready
+- [x] **Generate the six Flow clips** — `documentation/Demo_MakeAWish_Brief.md` has paste-ready
       prompts. Six shots exceeds one day of free Flow credits, so **start early**; this is the real
       gate on demo material, not the code.
 - [ ] **Pre-baked voice clone of Caleb** for a second example campaign, so cloning is demonstrated

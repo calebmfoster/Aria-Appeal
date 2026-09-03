@@ -1,12 +1,56 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-06-26
-**Phase**: Phase X — Session 11 complete; Video Previsualization in design
+**Date**: 2026-09-02
+**Phase**: Phase X — Video Previsualization; Plans 2 and 4 built, demo animatic assembled
 
 > Note: entries below are newest-first at the top of each phase but the file as a whole is
 > not strictly chronological. Session 11 (2026-06-08) is recorded lower down. Some interim
 > work (launcher worktree-source dropdown, Add-Voice-Profile modal) lives in git history and
 > `CLAUDE.md` but was never written up here.
+
+## Session 13 (2026-09-02) — Video Engine, Assembly, and the Make-A-Wish Demo Animatic
+
+Executed Plan 2 to completion and Plan 4 end to end. **There is now a playable demo artifact.**
+
+### Plan 2 — Video engine (Tasks 3-6)
+- [x] `AssetVideoProvider` — resolves pre-placed clips; path-traversal guarded.
+- [x] `GeminiVeoProvider` — Veo via `google-genai` 2.10.0, mocked in tests so CI never spends.
+      Config hardened against the real SDK schema: `generate_audio=False` (Veo 3 emits audio by
+      default and normalization strips it, so the default bills for a discarded soundtrack),
+      `resolution=1080p`, `person_generation=allow_adult`, `negative_prompt`, and
+      `reference_images` for character consistency. Poll deadline uses a monotonic clock — the
+      planned version could never time out when `poll_interval_s` was 0.
+- [x] `LocalVideoProvider` stub + factory. Factory raises on an unknown `source_type` rather than
+      falling through to the billed path, so a typo can't trigger a paid call.
+- [x] Launcher Settings: Gemini key, Veo model, provider toggle, persisted to `config.json`.
+
+### Plan 4 — ffmpeg assembly (all tasks)
+- [x] `compute_timeline` / `build_ass` — pure, unit-tested without ffmpeg.
+- [x] Fitting primitives: `trim_clip`, `freeze_pad_clip`, `pad_audio`, `silent_audio`.
+- [x] `assemble` — per-beat fit, concat video + audio, mux and burn captions in one encode.
+- [x] `POST/GET /api/v1/projects/{id}/video/export` with background assembly and status polling.
+- **Two deliberate deviations from the spec.** Beat window is `max(clip, narration)` rather than
+  clips trimmed to narration — the real footage is a finished film whose pacing is intentional.
+  And assembly builds its own audio track instead of reusing the gapless mastered WAV, which is
+  ~3s shorter than the picture and would desync every scene after the first.
+
+### Make-A-Wish demo fixture
+- [x] Seeded campaign on `admin@example.com`: six segments, visual bible, six clips.
+      `backend/scripts/seed_makeawish_demo.py`, `documentation/Demo_MakeAWish_Brief.md`.
+- [x] Six clips generated in Google Flow, split from the delivered film into
+      `static/video/assets/maya_01..06.mp4`. **Character consistency held across all shots** —
+      the costume anchor (helmet + yellow scarf) works where facial features would have drifted.
+- [x] Narration recut from ~45s to fit the real 23.85s footage; all six scenes fit with 2.95s slack.
+- [x] Scene 6 replaced: the original empty-hospital-bed ending could read as the child having died.
+- [x] **Assembled animatic: 23.87s, 1920x1080, 30fps**, narration locked per scene, burned-in captions.
+
+### Findings
+- Aiden's speech rate is driven by **sentence breaks, not word count** (~2.3 w/s across three
+  sentences vs ~3.8 across two). To fit a tight window, join clauses with commas.
+- ffmpeg's `subtitles` filter breaks on Windows drive colons — burn with `cwd` set to the work
+  directory and a relative filename.
+- `video_brief` is a JSON column: replace the dict, never mutate in place, or the write is dropped.
+- 5 backend tests fail and did so before this work — Celery-era and pre-refactor stubs. Logged.
 
 ## Session 12 (2026-06-26) — Client Feedback + Video Previsualization Design
 
