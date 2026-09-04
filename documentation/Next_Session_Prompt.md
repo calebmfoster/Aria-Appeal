@@ -7,8 +7,8 @@ Read `CLAUDE.md`, `documentation/Project_Progress.md`, `documentation/Open_Issue
 
 ## HARD DEADLINE
 
-**Client demo to the CTO, CAO and CIO — week of 2026-09-14.** Roughly seven working days from
-2026-09-03.
+**Client demo to the CTO, CAO and CIO — week of 2026-09-14.** Roughly six working days from
+2026-09-04.
 
 The audience is a technical/administrative buying committee, not a creative one. They will probe
 architecture, vendor lock-in and cost model more than aesthetics, and have signalled they may want a
@@ -60,7 +60,7 @@ ready clips, so it is off the critical path.
 52.8s uploaded reference; all nine presets are exposed, grouped by language, each previewing in its
 own language. All nine preset previews are pre-generated and cached.
 
-**Test state:** backend `5 failed, 126 passed`; frontend `6 failed, 27 passed`. Both failure counts
+**Test state:** backend `5 failed, 133 passed`; frontend `6 failed, 31 passed`. Both failure counts
 are the documented stale sets — see `Open_Issues.md`. Run `pytest tests/` (not bare `pytest`) and
 `npx jest` (there is no `npm test` script).
 
