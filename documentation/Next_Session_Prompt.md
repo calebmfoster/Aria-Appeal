@@ -1,4 +1,4 @@
-# Next Session Prompt: Demo Rehearsal + Content (all planned code is built)
+# Next Session Prompt: Demo Rehearsal + Content (all planned code is built and live-tested)
 
 Read `CLAUDE.md`, `documentation/Project_Progress.md`, `documentation/Open_Issues.md`, and
 `documentation/Product_Roadmap.md` (Tier V) for full context.
@@ -20,6 +20,26 @@ different video provider. Two rules follow:
 2. **Pre-generate everything before the meeting.** Nothing generated live on stage.
 
 ---
+
+## Session 15 (2026-09-04) — live testing pass
+
+Caleb drove the studio himself. Everything in the Video tab and the voice pickers checked out
+except two things, both now fixed and verified:
+
+- **A re-assembled animatic never appeared.** Assembly worked the whole time (the MP4 grew 23.87s →
+  24.37s with the new lines) — the player just never reloaded it, because the animatic URL is
+  identical on every assembly. Now cache-busted and keyed on an assembly stamp.
+- **Nothing flagged a stale animatic.** Audio auto-re-exports after a regenerate; video does not,
+  and still reported `ready`. Assembly now fingerprints its inputs and the Video tab shows an amber
+  "out of date — re-assemble" banner. Won't fire on an animatic built before this existed; it
+  self-heals on the next assembly.
+- Plus an `AbortError` on every tab switch (uncaught WaveSurfer `load()` rejection) — silenced,
+  verified 0 unhandled rejections across 12 switches.
+
+**Known rough edge worth deciding on:** the user still has to notice the banner and click
+Re-assemble. Consider auto-triggering video re-assembly after a regenerate the way audio does — but
+assembly is slow and GPU/ffmpeg-bound, so an automatic rebuild on every edit may be worse than the
+prompt. Judgement call, not a bug.
 
 ## State after Session 14 (2026-09-03)
 

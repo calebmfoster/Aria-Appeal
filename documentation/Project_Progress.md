@@ -1,12 +1,74 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-09-03
-**Phase**: Phase X — Video Previsualization; Plan 5 built, the studio has a working Video tab
+**Date**: 2026-09-04
+**Phase**: Phase X — Video Previsualization; Plan 5 built and live-tested, demo content pending
 
 > Note: entries below are newest-first at the top of each phase but the file as a whole is
 > not strictly chronological. Session 11 (2026-06-08) is recorded lower down. Some interim
 > work (launcher worktree-source dropdown, Add-Voice-Profile modal) lives in git history and
 > `CLAUDE.md` but was never written up here.
+
+## Session 15 (2026-09-04) — Live-testing fixes: stale animatic, AbortError
+
+Caleb drove the studio himself and hit two things. Both are fixed and verified; everything else in
+the Video tab and the voice pickers checked out.
+
+### The re-assembled animatic never appeared (the real one)
+
+Symptom: edited script lines, regenerated the audio, clicked **Re-assemble** — the video and
+subtitles didn't change.
+
+The pipeline was fine the whole time. Evidence: the MP4 on disk was rebuilt and grew 23.87s →
+24.37s, carrying the new narration and captions. **The player never reloaded it.** The animatic
+filename is `animatic_{project_id}.mp4` on every assembly, so a completed rebuild changes no prop,
+React never touches the element, and the browser keeps the already-decoded video.
+
+Fix: `VideoExportState` gained `readyAt`, stamped only on a transition *into* `ready` (so it stays
+stable across polls but changes on every completed assembly). The player cache-busts with it and
+uses it as a React `key`, forcing a fresh element and refetch.
+
+Consequence worth remembering: **any artifact served at a stable URL needs a version stamp**, or
+the UI silently shows a stale copy of it.
+
+### Nothing said the animatic was out of date
+
+Underneath the above sat a worse trap: after a regenerate, the *audio* master auto-re-exports
+(there is an effect for it) but the *video* does not — and the export endpoint still reported
+`ready`. A stale animatic was indistinguishable from a current one, which is exactly how a
+mismatched video gets presented in a client meeting.
+
+Fix: `assemble_project` now records `source_fingerprint(segments, subtitle_style)` — a hash over
+each segment's id, text and `audio_url`, plus the subtitle style. `GET /video/export` recomputes it
+and returns `stale`. The Video tab shows an amber "out of date — re-assemble" banner with an inline
+button.
+
+Deliberately conservative: a project assembled before the fingerprint existed has none stored and
+is **never** reported stale, so it can't cry wolf. It self-heals on the next assembly.
+
+### AbortError on every tab switch
+
+`AbortError: signal is aborted without reason` at `WaveformVisualizer.tsx` `ws.destroy()`.
+
+WaveSurfer's `load()` returns a promise that **rejects when `destroy()` aborts an in-flight fetch**.
+The rejection is asynchronous, so the existing `try/catch` around `destroy()` could never catch it —
+the dev overlay simply attributed the unhandled rejection to that line. Latent for a long time;
+Plan 5 made the waveform unmount on every tab switch, which turned it into a constant.
+
+Fix: a `loadSafely` wrapper swallows `AbortError` and reports anything else. Verified with an
+`unhandledrejection` listener: **0 rejections across 12 tab switches.**
+
+### Follow-on correctness fix
+
+Adding `key` to the video element broke the teardown by implication: the unmount effect captured
+`videoRef.current` at mount, so after a key swap it would pause a stale detached node and let the
+live one keep playing. Replaced with a callback ref, which React invokes with `null` for the
+outgoing element on **both** a key swap and unmount — so the element that actually goes away is the
+one paused.
+
+### Test state
+
+Backend **5 failed, 133 passed**; frontend **6 failed, 31 passed** — the same documented stale sets,
+10 new tests (7 backend fingerprint/stale, 4 frontend cache-bust/banner).
 
 ## Session 14 (2026-09-03) — Plan 5: the Audio | Video studio tab, and working voice previews
 

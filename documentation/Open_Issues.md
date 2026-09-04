@@ -1,6 +1,6 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-09-03
+**Last Updated**: 2026-09-04
 
 ## Critical / Blocking
 
@@ -40,7 +40,33 @@
 - ~~**Segment Click Doesn't Navigate**~~: RESOLVED — Clicking a segment seeks the waveform to that segment's start time.
 - ~~**Redundant Preview Section Button**~~: RESOLVED — Removed Preview Sequence button from header.
 
-## Frontend — Video studio (noted 2026-09-03)
+## Frontend — Video studio (noted 2026-09-03, extended 2026-09-04)
+
+- **Any artifact served at a stable URL needs a version stamp (2026-09-04).** The animatic is always
+  `animatic_{project_id}.mp4`, so a completed re-assembly changed no prop, React never touched the
+  `<video>`, and the browser kept the already-decoded file — the user saw their edits vanish even
+  though the new bytes were on disk. Fixed with `readyAt` in the export state, used as both a
+  `?t=` cache-buster and a React `key`. **The same trap applies to the audio master**
+  (`master_{project_id}.wav`) if it is ever rendered somewhere that doesn't already remount.
+- **The video does NOT auto-rebuild after a regenerate; the audio master does (2026-09-04).** There
+  is an effect that re-exports audio when all segments finish regenerating. Nothing equivalent
+  exists for video, and the export endpoint still reported `ready`, so a stale animatic looked
+  current. `assemble_project` now stores `source_fingerprint(segments, subtitle_style)` and
+  `GET /video/export` returns `stale`; the Video tab shows an amber re-assemble banner.
+  A project assembled before the fingerprint existed reports `stale: false` by design — it
+  self-heals on the next assembly. **Consider auto-triggering video re-assembly** the way audio
+  does, or at least prompting; currently the user must notice the banner.
+- **Never let a WaveSurfer `load()` promise go uncaught (2026-09-04).** It rejects with
+  `AbortError` when `destroy()` aborts an in-flight fetch. The rejection is asynchronous, so the
+  `try/catch` around `destroy()` cannot catch it and it surfaces as an unhandled rejection blamed
+  on the `destroy()` line. Latent for months; Plan 5 made the waveform unmount on every tab switch,
+  which made it constant. `loadSafely` swallows aborts and reports everything else.
+- **A media element with a changing `key` must use a callback ref, not an unmount effect
+  (2026-09-04).** An effect capturing `videoRef.current` at mount holds a stale detached node after
+  a key swap, so it pauses the wrong element and the live one keeps playing. A callback ref is
+  invoked with `null` for the outgoing node on both a key swap and unmount.
+
+## Frontend — Video studio (original notes, 2026-09-03)
 
 - **Video tab scope is preview + export only.** Reorder, trim, replace, per-clip regenerate and
   editable shot prompts are deliberately out — they need Plan 3's endpoints, which are written but
