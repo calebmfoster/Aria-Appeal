@@ -12,7 +12,7 @@ from app.models.project import Project
 from app.models.user import User
 from app.models.video_clip import VideoClipStatus
 from app.schemas.video import VideoClipsResponse
-from app.services.video.assembly import assemble_project
+from app.services.video.assembly import assemble_project, source_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ router = APIRouter()
 STATUS_KEY = "video_export_status"
 URL_KEY = "video_master_url"
 ERROR_KEY = "video_export_error"
+FINGERPRINT_KEY = "video_source_fingerprint"
 
 
 async def _set_export_state(db, project, status, url=None, error=None):
@@ -132,8 +133,14 @@ async def export_video_status(
 ):
     project = await _get_owned_project(db, project_id, current_user)
     brief = project.video_brief or {}
+    stored = brief.get(FINGERPRINT_KEY)
+    current = source_fingerprint(project.segments or [], project.subtitle_style)
     return {
         "status": brief.get(STATUS_KEY, "idle"),
         "video_master_url": brief.get(URL_KEY),
         "error": brief.get(ERROR_KEY),
+        # The script or narration changed since this animatic was built. Unlike the
+        # audio master, the video does not rebuild itself — nothing else would tell
+        # the user the video they are looking at is out of date.
+        "stale": bool(brief.get(URL_KEY)) and stored is not None and stored != current,
     }

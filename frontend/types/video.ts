@@ -48,6 +48,13 @@ export interface VideoExportState {
     status: VideoExportStatus;
     url: string | null;
     error: string | null;
+    /** Script or narration changed since this animatic was assembled. */
+    stale: boolean;
+    /** Stamped when an assembly completes. The animatic URL is identical across
+     *  re-assemblies, so this is what tells the player the bytes changed. */
+    readyAt: number | null;
 }
 
-export const IDLE_EXPORT: VideoExportState = { status: 'idle', url: null, error: null };
+export const IDLE_EXPORT: VideoExportState = {
+    status: 'idle', url: null, error: null, readyAt: null, stale: false,
+};

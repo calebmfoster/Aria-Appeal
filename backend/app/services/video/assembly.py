@@ -115,6 +115,29 @@ def compute_timeline(clips, segments, static_root: str, audio_dir: str) -> List[
     return beats
 
 
+def source_fingerprint(segments, subtitle_style: Optional[dict] = None) -> str:
+    """Identify the inputs an assembly was built from.
+
+    Stored on video_brief at assembly time and recomputed on read, so the studio
+    can tell that the animatic no longer matches the script. Regenerating a
+    segment gives it a fresh audio_url, and editing changes the text, so both
+    show up here. subtitle_style is included because it changes the burn-in.
+    """
+    import hashlib
+    import json
+
+    h = hashlib.sha256()
+    for s in sorted(segments, key=lambda s: getattr(s, "sequence_order", 0)):
+        h.update("|".join([
+            str(getattr(s, "id", "")),
+            getattr(s, "text", "") or "",
+            getattr(s, "audio_url", "") or "",
+        ]).encode("utf-8"))
+        h.update(b"\x00")
+    h.update(json.dumps(subtitle_style or {}, sort_keys=True).encode("utf-8"))
+    return h.hexdigest()
+
+
 def apply_timeline_positions(clips, beats: List[Beat]) -> None:
     """Stamp each clip with where it lands on the assembled timeline.
 
@@ -336,6 +359,9 @@ async def assemble_project(db, project_id) -> str:
     apply_timeline_positions(project.video_clips, beats)
     brief = dict(project.video_brief or {})
     brief["video_master_url"] = url
+    brief["video_source_fingerprint"] = source_fingerprint(
+        project.segments, project.subtitle_style
+    )
     project.video_brief = brief
     await db.commit()
     return url

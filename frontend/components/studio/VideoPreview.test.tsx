@@ -52,7 +52,7 @@ describe('VideoPreview', () => {
     it('shows the empty state with an assemble button before the first assembly', () => {
         mockStore()
 
-        render(<VideoPreview exportState={{ status: 'idle', url: null, error: null }} onAssemble={mockAssemble} />)
+        render(<VideoPreview exportState={{ status: 'idle', url: null, error: null, readyAt: null, stale: false }} onAssemble={mockAssemble} />)
 
         expect(screen.getByRole('button', { name: /assemble video/i })).toBeInTheDocument()
         expect(screen.queryByTestId('animatic-player')).not.toBeInTheDocument()
@@ -61,7 +61,7 @@ describe('VideoPreview', () => {
     it('triggers assembly from the empty state', () => {
         mockStore()
 
-        render(<VideoPreview exportState={{ status: 'idle', url: null, error: null }} onAssemble={mockAssemble} />)
+        render(<VideoPreview exportState={{ status: 'idle', url: null, error: null, readyAt: null, stale: false }} onAssemble={mockAssemble} />)
         fireEvent.click(screen.getByRole('button', { name: /assemble video/i }))
 
         expect(mockAssemble).toHaveBeenCalled()
@@ -70,7 +70,7 @@ describe('VideoPreview', () => {
     it('renders the player once an animatic url exists', () => {
         mockStore()
 
-        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null }} onAssemble={mockAssemble} />)
+        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: false }} onAssemble={mockAssemble} />)
 
         expect(screen.getByTestId('animatic-player')).toBeInTheDocument()
     })
@@ -78,7 +78,7 @@ describe('VideoPreview', () => {
     it('orders the clip strip by sequence_order regardless of array order', () => {
         mockStore()
 
-        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null }} onAssemble={mockAssemble} />)
+        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: false }} onAssemble={mockAssemble} />)
 
         const ids = screen.getAllByTestId('clip-strip-item').map(el => el.getAttribute('data-clip-id'))
         expect(ids).toEqual(['c0', 'c1', 'c2'])
@@ -88,7 +88,7 @@ describe('VideoPreview', () => {
         mockStore()
 
         render(<VideoPreview
-            exportState={{ status: 'failed', url: '/static/video/old.mp4', error: 'Clips not ready: scene 3.' }}
+            exportState={{ status: 'failed', url: '/static/video/old.mp4', error: 'Clips not ready: scene 3.', readyAt: 111, stale: false }}
             onAssemble={mockAssemble}
         />)
 
@@ -100,9 +100,51 @@ describe('VideoPreview', () => {
     it('shows a running indicator while assembling', () => {
         mockStore()
 
-        render(<VideoPreview exportState={{ status: 'running', url: null, error: null }} onAssemble={mockAssemble} />)
+        render(<VideoPreview exportState={{ status: 'running', url: null, error: null, readyAt: null, stale: false }} onAssemble={mockAssemble} />)
 
         expect(screen.getByText(/assembling/i)).toBeInTheDocument()
+    })
+
+    it('cache-busts the player src with the assembly stamp', () => {
+        // The animatic filename never changes across re-assemblies, so without
+        // this the browser keeps showing the previous render.
+        mockStore()
+
+        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: false }} onAssemble={mockAssemble} />)
+
+        expect(screen.getByTestId('animatic-player').getAttribute('src')).toContain('?t=111')
+    })
+
+    it('changes the player src when a re-assembly completes', () => {
+        mockStore()
+        const { rerender } = render(
+            <VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: false }} onAssemble={mockAssemble} />
+        )
+        const first = screen.getByTestId('animatic-player').getAttribute('src')
+
+        rerender(
+            <VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 222, stale: false }} onAssemble={mockAssemble} />
+        )
+
+        expect(screen.getByTestId('animatic-player').getAttribute('src')).not.toBe(first)
+    })
+
+    it('warns when the animatic is stale and offers a re-assemble', () => {
+        mockStore()
+
+        render(<VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: true }} onAssemble={mockAssemble} />)
+
+        expect(screen.getByText(/out of date/i)).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: /re-assemble/i }))
+        expect(mockAssemble).toHaveBeenCalled()
+    })
+
+    it('hides the stale warning while an assembly is running', () => {
+        mockStore()
+
+        render(<VideoPreview exportState={{ status: 'running', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: true }} onAssemble={mockAssemble} />)
+
+        expect(screen.queryByText(/out of date/i)).not.toBeInTheDocument()
     })
 
     it('pauses the player on unmount', () => {
@@ -111,7 +153,7 @@ describe('VideoPreview', () => {
         window.HTMLMediaElement.prototype.pause = pause
 
         const { unmount } = render(
-            <VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null }} onAssemble={mockAssemble} />
+            <VideoPreview exportState={{ status: 'ready', url: '/static/video/a.mp4', error: null, readyAt: 111, stale: false }} onAssemble={mockAssemble} />
         )
         unmount()
 

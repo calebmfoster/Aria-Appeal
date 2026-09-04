@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Clapperboard, Film, Loader2, RotateCw } from 'lucide-react';
 import { useStudioStore } from '@/store/studioStore';
 import { mediaUrl } from './VideoSegmentList';
@@ -31,7 +31,7 @@ function withPositions(clips: VideoClip[]) {
 }
 
 const VideoPreview: React.FC<VideoPreviewProps> = ({ exportState, onAssemble }) => {
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
     const [currentMs, setCurrentMs] = useState(0);
     const { videoClips, script, activeSegmentId, setActiveClip } = useStudioStore();
 
@@ -40,17 +40,21 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ exportState, onAssemble }) 
     // Mirrors the WaveformVisualizer unmount fix: leaving the studio, or flipping
     // to the Audio tab (which unmounts this component), must stop the audio.
     //
+    // A callback ref rather than an unmount effect, because the element is also
+    // swapped when `key` changes on a re-assembly — React calls this with null for
+    // the outgoing node in both cases, so the element that actually goes away is
+    // the one that gets paused. An effect capturing videoRef at mount would hold a
+    // stale node after a key change and let the live one keep playing.
+    //
     // pause() only — do NOT strip the src attribute. StrictMode's dev double-mount
-    // runs this cleanup against the same DOM node React reuses on the second mount,
-    // and React won't re-set an attribute it believes is unchanged, so the player
-    // comes back permanently sourceless. Unlike WaveSurfer's WebAudio backend, a
-    // media element stops dead on pause, so this is sufficient.
-    useEffect(() => {
-        const el = videoRef.current;
-        return () => {
-            if (!el) return;
-            try { el.pause(); } catch { /* already stopped */ }
-        };
+    // reuses the same DOM node, and React won't re-set an attribute it believes is
+    // unchanged, so the player would come back permanently sourceless. Unlike
+    // WaveSurfer's WebAudio backend, a media element stops dead on pause.
+    const setVideoEl = useCallback((el: HTMLVideoElement | null) => {
+        if (!el && videoRef.current) {
+            try { videoRef.current.pause(); } catch { /* already stopped */ }
+        }
+        videoRef.current = el;
     }, []);
 
     // Clicking a segment seeks the preview, mirroring how it seeks the waveform.
@@ -70,6 +74,14 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ exportState, onAssemble }) 
 
     const hasVideo = !!exportState.url;
 
+    // The animatic filename is identical across re-assemblies, so a completed
+    // rebuild changes no prop and React never touches the element — the player
+    // keeps showing the previous render. Bust the URL with the assembly stamp
+    // AND key the element on it, so a fresh <video> mounts and refetches.
+    const playerSrc = exportState.url
+        ? `${mediaUrl(exportState.url)}${exportState.readyAt ? `?t=${exportState.readyAt}` : ''}`
+        : '';
+
     return (
         <div className="w-full h-full p-4 flex flex-col gap-3">
             {exportState.status === 'failed' && exportState.error && (
@@ -86,12 +98,30 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ exportState, onAssemble }) 
                 </div>
             )}
 
+            {exportState.stale && exportState.status !== 'running' && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="flex-1 text-xs text-amber-800">
+                        This animatic is out of date — the script or narration changed since it was
+                        built. Re-assemble to bring the video and captions in line.
+                    </p>
+                    <button
+                        onClick={onAssemble}
+                        className="flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                    >
+                        <RotateCw className="h-3 w-3" />
+                        Re-assemble
+                    </button>
+                </div>
+            )}
+
             <div className="flex-1 min-h-0 rounded-2xl bg-black/90 flex items-center justify-center overflow-hidden">
                 {hasVideo ? (
                     <video
-                        ref={videoRef}
+                        ref={setVideoEl}
+                        key={playerSrc}
                         data-testid="animatic-player"
-                        src={mediaUrl(exportState.url)}
+                        src={playerSrc}
                         controls
                         playsInline
                         preload="metadata"

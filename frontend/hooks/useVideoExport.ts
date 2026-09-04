@@ -30,13 +30,26 @@ export function useVideoExport(projectId: string | undefined, token: string | un
             status: body.status ?? 'idle',
             url: body.video_master_url ?? null,
             error: body.error ?? null,
+            readyAt: null,
+            stale: !!body.stale,
         };
     }, [projectId, token]);
 
     // A failed assembly must leave any previous animatic playable, so a null
     // url from the server never overwrites a url we already hold.
+    //
+    // readyAt is stamped only on a transition INTO ready, so it stays stable
+    // across polls (no src churn) but changes on every completed re-assembly.
+    // The animatic filename never changes, so without this the player keeps
+    // showing the previous render even though the bytes on disk are new.
     const merge = useCallback((next: VideoExportState) => {
-        setState(prev => ({ ...next, url: next.url ?? prev.url }));
+        setState(prev => ({
+            ...next,
+            url: next.url ?? prev.url,
+            readyAt: next.status === 'ready'
+                ? (prev.status === 'ready' && prev.readyAt ? prev.readyAt : Date.now())
+                : prev.readyAt,
+        }));
     }, []);
 
     const refresh = useCallback(async () => {
@@ -61,7 +74,7 @@ export function useVideoExport(projectId: string | undefined, token: string | un
 
     const assemble = useCallback(async () => {
         if (!projectId || !token) return;
-        setState(prev => ({ status: 'running', url: prev.url, error: null }));
+        setState(prev => ({ status: 'running', url: prev.url, error: null, readyAt: prev.readyAt, stale: prev.stale }));
         try {
             const res = await apiFetch(`/projects/${projectId}/video/export`, {
                 method: 'POST',
@@ -74,14 +87,14 @@ export function useVideoExport(projectId: string | undefined, token: string | un
                     ? body.detail
                     : 'Assembly could not be started.';
                 if (aliveRef.current) {
-                    setState(prev => ({ status: 'failed', url: prev.url, error: detail }));
+                    setState(prev => ({ status: 'failed', url: prev.url, error: detail, readyAt: prev.readyAt, stale: prev.stale }));
                 }
                 return;
             }
             if (aliveRef.current) poll();
         } catch (e: any) {
             if (aliveRef.current) {
-                setState(prev => ({ status: 'failed', url: prev.url, error: e?.message ?? 'Assembly failed.' }));
+                setState(prev => ({ status: 'failed', url: prev.url, error: e?.message ?? 'Assembly failed.', readyAt: prev.readyAt, stale: prev.stale }));
             }
         }
     }, [projectId, token, poll]);

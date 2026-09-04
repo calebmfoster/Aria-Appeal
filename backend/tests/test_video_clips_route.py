@@ -8,6 +8,7 @@ from app.api import deps
 from app.models.user import User
 from app.models.project import Project
 from app.models.video_clip import VideoClip, VideoClipStatus, VideoSourceType
+from app.models.script_segment import ScriptSegment
 
 
 OWNER_ID = uuid.uuid4()
@@ -132,3 +133,100 @@ def test_clips_404s_for_another_users_project():
     r = client.get(f"/api/v1/projects/{PROJECT_ID}/video/clips")
 
     assert r.status_code == 404
+
+
+class _Seg:
+    """Plain stand-in for the pure fingerprint tests."""
+    def __init__(self, sid, order, text, audio_url):
+        self.id = sid
+        self.sequence_order = order
+        self.text = text
+        self.audio_url = audio_url
+
+
+def _orm_seg(text, audio_url, order=0):
+    """Route tests need real ORM instances — assigning plain objects to the
+    segments relationship trips SQLAlchemy's instrumentation."""
+    return ScriptSegment(
+        id=uuid.uuid4(),
+        project_id=PROJECT_ID,
+        sequence_order=order,
+        text=text,
+        audio_url=audio_url,
+    )
+
+
+def test_fingerprint_changes_when_a_segment_is_regenerated():
+    """Regenerating gives the segment a fresh audio_url, which must mark the
+    already-built animatic stale."""
+    from app.services.video.assembly import source_fingerprint
+
+    before = [_Seg("a", 0, "line one", "/static/audio/old.wav")]
+    after = [_Seg("a", 0, "line one", "/static/audio/new.wav")]
+
+    assert source_fingerprint(before) != source_fingerprint(after)
+
+
+def test_fingerprint_changes_when_text_is_edited():
+    from app.services.video.assembly import source_fingerprint
+
+    before = [_Seg("a", 0, "To be an astronaut.", "/static/audio/x.wav")]
+    after = [_Seg("a", 0, "To explore the stars.", "/static/audio/x.wav")]
+
+    assert source_fingerprint(before) != source_fingerprint(after)
+
+
+def test_fingerprint_changes_with_subtitle_style():
+    from app.services.video.assembly import source_fingerprint
+
+    segs = [_Seg("a", 0, "line", "/static/audio/x.wav")]
+
+    assert source_fingerprint(segs, {"font_size": 54}) != source_fingerprint(segs, {"font_size": 48})
+
+
+def test_fingerprint_is_stable_for_unchanged_input_and_order_independent():
+    from app.services.video.assembly import source_fingerprint
+
+    a = _Seg("a", 0, "one", "/static/audio/1.wav")
+    b = _Seg("b", 1, "two", "/static/audio/2.wav")
+
+    assert source_fingerprint([a, b]) == source_fingerprint([b, a])
+
+
+def test_export_status_reports_stale_when_the_script_moved_on():
+    project = _project(clips=[_clip(0)], brief={
+        "video_export_status": "ready",
+        "video_master_url": "/static/video/a.mp4",
+        "video_source_fingerprint": "stale-value-from-an-older-assembly",
+    })
+    project.segments = [_orm_seg("edited line", "/static/audio/new.wav")]
+    client = _client(project)
+
+    body = client.get(f"/api/v1/projects/{PROJECT_ID}/video/export").json()
+
+    assert body["status"] == "ready"
+    assert body["stale"] is True
+
+
+def test_export_status_is_not_stale_right_after_assembly():
+    from app.services.video.assembly import source_fingerprint
+
+    segs = [_orm_seg("line", "/static/audio/new.wav")]
+    project = _project(clips=[_clip(0)], brief={
+        "video_export_status": "ready",
+        "video_master_url": "/static/video/a.mp4",
+        "video_source_fingerprint": source_fingerprint(segs, None),
+    })
+    project.segments = segs
+    client = _client(project)
+
+    assert client.get(f"/api/v1/projects/{PROJECT_ID}/video/export").json()["stale"] is False
+
+
+def test_export_status_is_not_stale_before_any_assembly():
+    """No animatic yet means nothing to be out of date."""
+    project = _project(clips=[_clip(0)])
+    project.segments = [_orm_seg("line", "/static/audio/new.wav")]
+    client = _client(project)
+
+    assert client.get(f"/api/v1/projects/{PROJECT_ID}/video/export").json()["stale"] is False
