@@ -95,10 +95,11 @@ static_app.add_middleware(
 static_app.mount("/", StaticFiles(directory=static_dir), name="static")
 app.mount("/static", static_app)
 
-from app.api.routes import generation, settings as settings_router, audio, auth, voice_profiles, projects
+from app.api.routes import generation, settings as settings_router, audio, auth, voice_profiles, projects, video
 app.include_router(generation.router, prefix=settings.API_V1_STR, tags=["generation"])
 app.include_router(settings_router.router, prefix=settings.API_V1_STR, tags=["settings"])
 app.include_router(audio.router, prefix=settings.API_V1_STR, tags=["audio"])
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(voice_profiles.router, prefix=f"{settings.API_V1_STR}/voice-profiles", tags=["voice-profiles"])
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["projects"])
+app.include_router(video.router, prefix=f"{settings.API_V1_STR}/projects", tags=["video"])

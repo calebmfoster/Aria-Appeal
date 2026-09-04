@@ -1,14 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 import uuid
 import logging
 from app.db.session import get_db
-from app.schemas.voice_profile import VoiceProfileCreate, VoiceProfileResponse, VoiceProfileRename, VoiceValidationResponse
+from app.schemas.voice_profile import (
+    VoiceProfileCreate, VoiceProfileResponse, VoiceProfileRename,
+    VoiceValidationResponse, VoicePresetResponse, VoicePreviewResponse,
+)
 from app.models.voice_profile import VoiceProfile
 from app.services.voice_validator import voice_validator
 from app.services.voice_cloner import voice_cloner
+from app.services import voice_preview
+from app.services.voice_presets import PRESETS, get_preset
 from app.api import deps
 from app.models.user import User
 
@@ -22,6 +27,7 @@ async def create_voice_profile(
     base_model: str = Form("Qwen3-TTS-12Hz-1.7B-Base"),
     reference_text: Optional[str] = Form(None),
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
@@ -59,6 +65,14 @@ async def create_voice_profile(
     await db.commit()
     await db.refresh(db_voice)
 
+    # Warm the greeting preview so the dashboard usually has one by the time the
+    # list refreshes; the POST /{id}/preview route regenerates it lazily otherwise.
+    if background_tasks is not None:
+        background_tasks.add_task(
+            voice_preview.ensure_clone_preview,
+            db_voice.id, db_voice.reference_audio_path, db_voice.reference_text,
+        )
+
     return VoiceProfileResponse.from_orm_with_clone_status(db_voice)
 
 @router.get("/", response_model=List[VoiceProfileResponse])
@@ -72,6 +86,65 @@ async def list_voice_profiles(
     result = await db.execute(select(VoiceProfile).where(VoiceProfile.user_id == current_user.id))
     profiles = result.scalars().all()
     return [VoiceProfileResponse.from_orm_with_clone_status(p) for p in profiles]
+
+@router.get("/presets", response_model=List[VoicePresetResponse])
+async def list_voice_presets():
+    """The nine Qwen preset speakers with their native languages.
+
+    Reads the cache only — never synthesizes, so the pickers stay instant.
+    """
+    return [
+        VoicePresetResponse(
+            speaker=p.speaker,
+            label=p.label,
+            language=p.language,
+            language_label=p.language_label,
+            gender=p.gender,
+            accent=p.accent,
+            greeting=p.greeting,
+            gloss=p.gloss,
+            preview_url=voice_preview.cached_url(
+                voice_preview.preset_preview_filename(p.speaker)
+            ),
+        )
+        for p in PRESETS
+    ]
+
+
+@router.post("/presets/{speaker}/preview", response_model=VoicePreviewResponse)
+async def generate_preset_preview(speaker: str):
+    """Synthesize (or return the cached) greeting for a preset, in its own language."""
+    if get_preset(speaker) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown preset speaker: {speaker}")
+
+    url = await voice_preview.ensure_preset_preview(speaker)
+    if not url:
+        raise HTTPException(status_code=503, detail="Preview synthesis is unavailable.")
+    return VoicePreviewResponse(preview_url=url)
+
+
+@router.post("/{profile_id}/preview", response_model=VoicePreviewResponse)
+async def generate_clone_preview(
+    profile_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(deps.get_current_user),
+):
+    """Synthesize (or return the cached) greeting in a cloned voice."""
+    result = await db.execute(select(VoiceProfile).where(
+        VoiceProfile.id == profile_id,
+        VoiceProfile.user_id == current_user.id,
+    ))
+    profile = result.scalars().first()
+    if not profile or profile.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Voice profile not found")
+
+    url = await voice_preview.ensure_clone_preview(
+        profile.id, profile.reference_audio_path, profile.reference_text
+    )
+    if not url:
+        raise HTTPException(status_code=503, detail="Preview synthesis is unavailable.")
+    return VoicePreviewResponse(preview_url=url)
+
 
 @router.delete("/{profile_id}")
 async def delete_voice_profile(
@@ -93,6 +166,7 @@ async def delete_voice_profile(
     
     await db.delete(profile)
     await db.commit()
+    voice_preview.delete_clone_preview(profile_id)
     return {"message": "Voice profile deleted"}
 
 @router.patch("/{profile_id}", response_model=VoiceProfileResponse)

@@ -138,15 +138,29 @@ const WaveformVisualizer: React.FC = () => {
         return `${baseUrl}${url}`;
     };
 
+    // load() returns a promise that REJECTS when destroy() aborts an in-flight
+    // fetch. The rejection is asynchronous, so the try/catch around destroy()
+    // cannot see it and it surfaces as an unhandled rejection blamed on that
+    // line. Swallow the abort here; report anything else.
+    const loadSafely = (url: string) => {
+        const result = wavesurferRef.current?.load(url) as unknown;
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+            (result as Promise<void>).catch((err: Error) => {
+                if (err?.name === 'AbortError') return;
+                console.warn('WaveSurfer load failed:', err);
+            });
+        }
+    };
+
     // Load Audio
     useEffect(() => {
         if (wavesurferRef.current) {
             if (audioUrl) {
-                wavesurferRef.current.load(getFullAudioUrl(audioUrl));
+                loadSafely(getFullAudioUrl(audioUrl));
             } else if (activeSegmentId) {
                 const activeSegment = script.find(s => s.id === activeSegmentId);
                 if (activeSegment?.audio_url) {
-                    wavesurferRef.current.load(getFullAudioUrl(activeSegment.audio_url));
+                    loadSafely(getFullAudioUrl(activeSegment.audio_url));
                 } else {
                     wavesurferRef.current.empty();
                 }

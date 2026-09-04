@@ -5,3 +5,4 @@ from app.models.user import User  # noqa
 from app.models.project import Project  # noqa
 from app.models.voice_profile import VoiceProfile  # noqa
 from app.models.script_segment import ScriptSegment  # noqa
+from app.models.video_clip import VideoClip  # noqa: F401

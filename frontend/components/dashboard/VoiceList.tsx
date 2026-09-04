@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { API_URL } from '@/lib/config';
 import { apiFetch } from '@/lib/api';
-import { Trash2, Mic, Play, Square, Loader2, Plus } from 'lucide-react';
+import { Trash2, Mic, Loader2, Plus } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import VoicePreviewButton from '@/components/ui/VoicePreviewButton';
 import type { VoiceProfile } from '@/types/studio';
 
 interface Campaign {
@@ -192,21 +193,13 @@ export const VoiceList: React.FC<VoiceListProps> = ({ refreshKey, onAddClick }) 
                                 className="flex items-center justify-between p-3 bg-moore-cream/50 border border-gray-100 rounded-xl hover:bg-moore-cream transition-colors"
                             >
                                 <div className="flex items-center gap-3">
-                                    {profile.has_cloned_voice && profile.preview_url && (
-                                        <button
-                                            onClick={() => togglePlayback(profile)}
-                                            className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors ${
-                                                playingId === profile.id
-                                                    ? 'text-moore-red bg-moore-red/10'
-                                                    : 'text-moore-mid-gray hover:text-moore-red hover:bg-moore-red/10'
-                                            }`}
-                                        >
-                                            {playingId === profile.id ? (
-                                                <Square className="w-3.5 h-3.5" />
-                                            ) : (
-                                                <Play className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
+                                    {profile.has_cloned_voice && (
+                                        <VoicePreviewButton
+                                            target={profile.id}
+                                            kind="clone"
+                                            previewUrl={profile.preview_url}
+                                            caption="Welcome to Aria Appeal."
+                                        />
                                     )}
                                     <div>
                                         <div className="flex items-center gap-2">

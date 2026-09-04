@@ -52,6 +52,9 @@ class ProjectCreate(BaseModel):
     # UUID OR a preset speaker name. Both None → chained generation defaults to Aiden.
     voice_profile_id: Optional[str] = None
     speaker_preset: Optional[str] = None
+    # "audio" (default) or "video". Persisted into target_audience["medium"];
+    # the key's absence means audio, so existing campaigns are untouched.
+    medium: Optional[Literal["audio", "video"]] = "audio"
 
 
 class SegmentAddRequest(BaseModel):
@@ -85,3 +88,9 @@ class ProjectRead(ProjectBase):
 
     class Config:
         from_attributes = True
+
+
+class ProjectSettingsUpdate(BaseModel):
+    """Project-level settings the studio can change after creation."""
+    medium: Optional[Literal["audio", "video"]] = None
+    subtitle_style: Optional[Dict[str, Any]] = None
