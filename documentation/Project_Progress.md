@@ -1,12 +1,30 @@
 # Aria Appeal - Project Progress Report
 
-**Date**: 2026-09-04
-**Phase**: Phase X — Video Previsualization; Plan 5 built and live-tested, demo content pending
+**Date**: 2026-09-07
+**Phase**: Phase X — Video Previsualization merged to `main`; demo content and rehearsal pending
 
 > Note: entries below are newest-first at the top of each phase but the file as a whole is
 > not strictly chronological. Session 11 (2026-06-08) is recorded lower down. Some interim
 > work (launcher worktree-source dropdown, Add-Voice-Profile modal) lives in git history and
 > `CLAUDE.md` but was never written up here.
+
+## Session 16 (2026-09-07) — `feat/video-previs` merged to `main`
+
+The whole video previsualization feature is now on `main`. PR #4 — open as a draft since 2026-06-29,
+when only Plan 1 existed — was retitled, its description rewritten to cover the finished slice, taken
+out of draft and merged with a merge commit (`7815f1d`), matching how PR #3 landed. 53 commits,
+87 files, +11,777/−153.
+
+The presented build is now the mainline build, with a week of margin before the demo (week of
+2026-09-14) to catch anything the merge shakes loose.
+
+**Deliberate call — 27MB of binaries entered history.** The 21.8MB `MAW_pitch_v2_nightsky.mp4` under
+`backend/static/video/source/` is raw Flow footage that nothing reads at runtime; the six
+`maya_*.mp4` clips (~4.8MB) are load-bearing for the seeded demo fixture. Stripping the source file
+would mean rewriting an already-pushed branch, so it stays. Revisit only if clone size starts to
+hurt.
+
+No code changed this session.
 
 ## Session 15 (2026-09-04) — Live-testing fixes: stale animatic, AbortError
 

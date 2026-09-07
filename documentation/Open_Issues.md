@@ -1,6 +1,15 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-09-04
+**Last Updated**: 2026-09-07
+
+## Repo hygiene (noted 2026-09-07)
+
+- **27MB of binaries are in git history, accepted deliberately.** Merged with PR #4:
+  `backend/static/video/source/MAW_pitch_v2_nightsky.mp4` (21.8MB) is raw Flow source footage the
+  app never reads at runtime, and the six `backend/static/video/assets/maya_*.mp4` clips (~4.8MB)
+  are required by the seeded demo fixture. Removing the source file means rewriting an
+  already-pushed branch, so it stays. Only revisit if clone/CI time becomes a real cost — and if a
+  future session adds more source footage, put it behind `.gitignore` rather than tracking it.
 
 ## Critical / Blocking
 
