@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Mail, Lock } from "lucide-react";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -157,5 +157,19 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+// useSearchParams() forces client-side bailout; without a Suspense boundary the
+// production build fails to prerender this route.
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center bg-moore-cream">
+                <Loader2 className="h-6 w-6 animate-spin text-moore-red" />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     );
 }

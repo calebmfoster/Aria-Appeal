@@ -9,6 +9,7 @@ import enum
 if TYPE_CHECKING:
     from .user import User
     from .script_segment import ScriptSegment
+    from .video_clip import VideoClip
 
 class ProjectStatus(str, enum.Enum):
     DRAFT = "draft"
@@ -22,6 +23,9 @@ class Project(Base):
     target_audience: Mapped[dict] = mapped_column(JSON)
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus), default=ProjectStatus.DRAFT)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    video_brief: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    subtitle_style: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     owner: Mapped["User"] = relationship("User", back_populates="projects")
     segments: Mapped[List["ScriptSegment"]] = relationship("ScriptSegment", back_populates="project")
+    video_clips: Mapped[List["VideoClip"]] = relationship("VideoClip", back_populates="project")

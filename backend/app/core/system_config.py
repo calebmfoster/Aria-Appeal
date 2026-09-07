@@ -31,6 +31,19 @@ class SystemSettings(BaseModel):
     tts_provider: Literal["qwen3-local", "openai"] = Field("qwen3-local", description="The TTS provider.")
     tts_model: str = Field("qwen3-tts", description="The TTS model name.")
 
+    video_provider: Literal["gemini", "local"] = Field(
+        "gemini",
+        description="Generated-video backend: 'gemini' (Veo via Gemini API) or 'local' (future on-prem)."
+    )
+    gemini_api_key: str = Field(
+        "",
+        description="Google Gemini API key for Veo video generation."
+    )
+    veo_model: str = Field(
+        "veo-3.0-generate-001",
+        description="Veo model id used when video_provider is 'gemini'."
+    )
+
 class ConfigManager:
     _instance = None
     _settings: SystemSettings = None
@@ -59,6 +72,10 @@ class ConfigManager:
             env_key = os.environ.get("ANTHROPIC_API_KEY", "")
             if env_key:
                 self._settings = self._settings.model_copy(update={"anthropic_api_key": env_key})
+        if not self._settings.gemini_api_key:
+            env_gemini = os.environ.get("GEMINI_API_KEY", "")
+            if env_gemini:
+                self._settings = self._settings.model_copy(update={"gemini_api_key": env_gemini})
 
     def save_config(self):
         """Saves current config to file."""

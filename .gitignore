@@ -27,6 +27,12 @@ frontend/.env.local
 /static/voice_uploads/
 backend/static/audio/
 backend/static/voice_uploads/
+/static/video/
+# Generated clips and assembled animatics are rebuildable; demo source material
+# and the hand-made Flow clips are not, so those two dirs are tracked.
+backend/static/video/*
+!backend/static/video/assets/
+!backend/static/video/source/
 
 # Local infra
 backend/Redis/

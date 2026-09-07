@@ -1,6 +1,6 @@
 # Open Issues & Observations
 
-**Last Updated**: 2026-06-17
+**Last Updated**: 2026-09-04
 
 ## Critical / Blocking
 
@@ -40,6 +40,55 @@
 - ~~**Segment Click Doesn't Navigate**~~: RESOLVED — Clicking a segment seeks the waveform to that segment's start time.
 - ~~**Redundant Preview Section Button**~~: RESOLVED — Removed Preview Sequence button from header.
 
+## Frontend — Video studio (noted 2026-09-03, extended 2026-09-04)
+
+- **Any artifact served at a stable URL needs a version stamp (2026-09-04).** The animatic is always
+  `animatic_{project_id}.mp4`, so a completed re-assembly changed no prop, React never touched the
+  `<video>`, and the browser kept the already-decoded file — the user saw their edits vanish even
+  though the new bytes were on disk. Fixed with `readyAt` in the export state, used as both a
+  `?t=` cache-buster and a React `key`. **The same trap applies to the audio master**
+  (`master_{project_id}.wav`) if it is ever rendered somewhere that doesn't already remount.
+- **The video does NOT auto-rebuild after a regenerate; the audio master does (2026-09-04).** There
+  is an effect that re-exports audio when all segments finish regenerating. Nothing equivalent
+  exists for video, and the export endpoint still reported `ready`, so a stale animatic looked
+  current. `assemble_project` now stores `source_fingerprint(segments, subtitle_style)` and
+  `GET /video/export` returns `stale`; the Video tab shows an amber re-assemble banner.
+  A project assembled before the fingerprint existed reports `stale: false` by design — it
+  self-heals on the next assembly. **Consider auto-triggering video re-assembly** the way audio
+  does, or at least prompting; currently the user must notice the banner.
+- **Never let a WaveSurfer `load()` promise go uncaught (2026-09-04).** It rejects with
+  `AbortError` when `destroy()` aborts an in-flight fetch. The rejection is asynchronous, so the
+  `try/catch` around `destroy()` cannot catch it and it surfaces as an unhandled rejection blamed
+  on the `destroy()` line. Latent for months; Plan 5 made the waveform unmount on every tab switch,
+  which made it constant. `loadSafely` swallows aborts and reports everything else.
+- **A media element with a changing `key` must use a callback ref, not an unmount effect
+  (2026-09-04).** An effect capturing `videoRef.current` at mount holds a stale detached node after
+  a key swap, so it pauses the wrong element and the live one keeps playing. A callback ref is
+  invoked with `null` for the outgoing node on both a key swap and unmount.
+
+## Frontend — Video studio (original notes, 2026-09-03)
+
+- **Video tab scope is preview + export only.** Reorder, trim, replace, per-clip regenerate and
+  editable shot prompts are deliberately out — they need Plan 3's endpoints, which are written but
+  not executed. The clip inspector is read-only by design; the only control that writes is the
+  subtitle toggle/size, labelled "applies on next assembly".
+- **Never hide the two centre players with CSS.** `activeTab` swaps `VideoPreview` and
+  `WaveformVisualizer` as mutually exclusive branches on purpose: unmounting is what runs each
+  one's teardown and stops its playback. A `display:none` refactor would silently reintroduce the
+  leave-the-studio-with-audio-playing bug.
+- **Do not strip `src` in a media element's unmount cleanup.** StrictMode's dev double-mount runs
+  cleanup against the DOM node React reuses on the second mount, and React will not re-set an
+  attribute it believes is unchanged — the player comes back permanently sourceless. `pause()` is
+  sufficient for a `<video>`/`<audio>` element; only WaveSurfer's WebAudio backend needs the
+  heavier teardown.
+- **Do not reset `activeTab` inside `fetchProjectData`.** That function re-runs on every refetch
+  (its effect depends on the `useSession` object identity), so resetting snaps the user back to
+  the Audio tab mid-interaction. The studio page derives an effective tab from `medium` instead.
+- **`npm run build` was broken on this branch before 2026-09-03** — `/login` used
+  `useSearchParams()` with no Suspense boundary, so prerendering failed. Fixed. Worth knowing that
+  the production build was never exercised for a long stretch; other routes may have latent
+  prerender issues.
+
 ## Frontend — Remaining
 
 - ~~**Cloned Voice Preview Beep**~~: RESOLVED (Session 3) — TTS models now load properly, generating real speech instead of sine waves.
@@ -54,9 +103,78 @@
 - ~~**TTS Mock Mode**~~: RESOLVED (Session 3) — Both models load and generate real speech on CPU.
 - **Tokenizer Warning**: `Qwen3TTSTokenizer` fails to load ("model type qwen3_tts not recognized by Transformers"). Embeddings use spectral fallback. May need `pip install --upgrade transformers` or install from source.
 - **Audio Data**: Reference audio stored at absolute paths in `static/voice_uploads/`. Generated audio at `static/audio/`. Preview URLs served via static mount.
-- **FFmpeg Dependency**: `ffmpeg`/`ffprobe` missing. Audio processing limited to WAV-only via `soundfile`.
+- ~~**FFmpeg Dependency**~~: RESOLVED (2026-06-27, video previs prereqs) — ffmpeg/ffprobe 8.1.2 installed via winget (`Gyan.FFmpeg`) and on PATH. Audio processing still WAV-only via `soundfile`; ffmpeg is used by the video pipeline (`app/services/video/ffmpeg_utils.py`), which also honours `FFMPEG_BINARY`/`FFPROBE_BINARY` overrides.
 - **SoX Warning**: "SoX could not be found" at startup — cosmetic, doesn't affect functionality.
 - **Setuptools Compatibility**: `pyloudnorm` requires `pkg_resources`. Fixed by pinning `setuptools<70.0.0`.
+
+## Dashboard — Voice previews (RESOLVED 2026-09-03)
+
+- ~~**Every voice preview should say "Welcome to Aria Appeal"; none of them do.**~~ RESOLVED.
+  Both bugs are fixed by `app/services/voice_preview.py`, which synthesizes a short greeting
+  through the normal TTS path and caches it to `static/audio/preview_preset_{Speaker}.wav`
+  (shared across users) and `preview_clone_{profile_id}.wav`.
+  - Cloned voices no longer replay the raw upload. For scale: the "Me" profile's uploaded
+    reference is **52.8 seconds**; its preview is now **1.56 seconds**.
+  - Preset voices have previews now. `VoiceList.tsx` shows the button unconditionally for cloned
+    profiles and generates on first click; the pickers preview the selected preset.
+  - New routes: `GET /voice-profiles/presets` (cache-only, never synthesizes, so pickers stay
+    instant), `POST /voice-profiles/presets/{speaker}/preview`, `POST /voice-profiles/{id}/preview`.
+  - Clone previews are warmed in a background task on upload and deleted with the profile.
+
+- ~~**Language-label the preset picker.**~~ RESOLVED 2026-09-03. All nine presets are exposed
+  again — the picker had been narrowed to Aiden and Ryan, which hid seven working voices. Now
+  grouped English → Chinese → Japanese → Korean, English first, Aiden/Ryan the defaults, each
+  previewing in its own language with the English gloss as caption text. The studio inspector
+  shows an amber note on non-English presets. Catalogue lives in
+  `backend/app/services/voice_presets.py` (source of truth for synthesis) mirrored by
+  `frontend/lib/voicePresets.ts` (display only); a backend test asserts the two agree with
+  `TTSService.PRESET_SPEAKERS`.
+  - **Scope honesty stands:** this makes the *voice* layer multi-language. Script generation, the
+    studio UI, and subtitle rendering are still English-only. Say "multi-language narration" in the
+    room, not "multi-language product".
+  - **Not yet listened to by a human.** All nine files are real speech (1.8–4.7s), but nobody has
+    confirmed the CJK reads are idiomatic. `Uncle_Fu` is 4.65s for the same Chinese line the other
+    Chinese presets deliver in ~1.9s — worth a listen before the demo. If a CJK preview reads
+    badly, the fix is to thread an explicit `language` argument through
+    `TTSService.generate_audio` / `_generate_preset_voice`, which currently hardcode
+    `language="Auto"`. Pre-generate everything with
+    `backend/scripts/warm_voice_previews.py`.
+
+## Testing (noted 2026-07-27)
+
+- **5 stale backend tests fail, unrelated to current work (open)**: Verified pre-existing by
+  running the suite at `5e03c28` (the commit before Plan 2 Task 3) — same 5 failures. They test
+  architecture the project has since moved off:
+  - `test_audio_generation.py::test_tts_service_qwen_local_fallback` and `::test_generate_audio_endpoint`
+    — patch `generate_audio_task.delay`, i.e. Celery. The project uses FastAPI `BackgroundTasks`.
+  - `test_manual_generation.py::test_llm_parsing` and `::test_llm_parsing_wrapper`
+    — reference `app.services.llm.client`, removed in the Session 6 Claude-provider refactor.
+  - `test_settings.py::test_settings_api` — POSTs `llm_provider: "openai"`, which the
+    `Literal["claude","local"]` on `SystemSettings` rejects with 422.
+  **Fix direction**: rewrite against the current architecture or delete. Until then they mask real
+  regressions — but "5 failed" is the suite's normal state. As of 2026-09-03 the full result is
+  **5 failed, 126 passed**.
+- **Run `pytest tests/`, never bare `pytest` (noted 2026-09-03)**: there is a stray
+  `backend/test_celery_task.py` at the backend root that calls `exit(1)` at import time. Bare
+  `pytest` collects it and dies with `INTERNALERROR ... SystemExit: 1` before running anything.
+  It is a leftover script, not a test. Delete it or move it under `scripts/`.
+- **5 stale FRONTEND tests fail too (noted 2026-09-03)**: `InspectorPanel.test.tsx` (4) and
+  `ScriptEditor.test.tsx` (2) mock the Zustand store but not `next-auth/react` or
+  `next/navigation`, which both components now call — so they throw on render. Pre-existing and
+  unrelated to current work; "6 failed, 27 passed" is the frontend suite's normal state. Note
+  `frontend/package.json` has **no `test` script** — run `npx jest`.
+- **Test isolation: module-level `dependency_overrides` are fragile (fixed 2026-09-03)**:
+  `test_rate_limiting.py` assigned `app.dependency_overrides[get_db]` at import time. Every
+  TestClient-based test module clears `dependency_overrides` in its teardown, so whichever sorted
+  first alphabetically wiped it, and `/auth/register` then hit the real asyncpg pool on a closed
+  event loop (`RuntimeError: Event loop is closed`). Latent for months; surfaced only when
+  `test_project_settings_route.py` sorted ahead of it. Fixed by installing the override in an
+  autouse fixture. **Any new TestClient test module should do the same** rather than assigning at
+  import time.
+- **Anthropic API key printed to pytest stdout (open, minor)**: `test_settings_api` prints the full
+  settings dict, including the live `anthropic_api_key` from `config.json`. `backend/config.json`
+  is gitignored, but CI logs or a pasted test run would leak the key. Redact the print when fixing
+  the test above.
 
 ## Infrastructure
 

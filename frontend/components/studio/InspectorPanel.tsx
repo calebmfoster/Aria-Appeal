@@ -18,13 +18,8 @@ import {
 } from "@/components/ui/select";
 import type { VoiceProfile } from '@/types/studio';
 
-// Only Aiden and Ryan are native-English Qwen3-TTS presets; the other 7 are
-// Chinese/Japanese/Korean-native and sound off reading English. For more English
-// voices (esp. female — there is no English female preset), use cloned voices.
-const PRESET_SPEAKERS = [
-    { value: 'Aiden', label: 'Aiden — Male (English)' },
-    { value: 'Ryan',  label: 'Ryan — Male (English)' },
-];
+import { PRESET_GROUPS, isPresetSpeaker, getPreset } from '@/lib/voicePresets';
+import VoicePreviewButton from '@/components/ui/VoicePreviewButton';
 
 function VoiceTabToggle({ tab, onChange }: { tab: 'preset' | 'cloned'; onChange: (t: 'preset' | 'cloned') => void }) {
     return (
@@ -54,9 +49,16 @@ function VoiceTabToggle({ tab, onChange }: { tab: 'preset' | 'cloned'; onChange:
 function VoiceSelectContent({ tab, voiceProfiles }: { tab: 'preset' | 'cloned'; voiceProfiles: VoiceProfile[] }) {
     return (
         <SelectContent>
-            {tab === 'preset' && <SelectItem value="default">Default / Auto</SelectItem>}
-            {tab === 'preset' && PRESET_SPEAKERS.map(p => (
-                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+            {tab === 'preset' && <SelectItem value="default">Default / Auto (Aiden)</SelectItem>}
+            {tab === 'preset' && PRESET_GROUPS.map(group => (
+                <React.Fragment key={group.language}>
+                    <div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-moore-mid-gray">
+                        {group.label}
+                    </div>
+                    {group.presets.map(p => (
+                        <SelectItem key={p.speaker} value={p.speaker}>{p.label}</SelectItem>
+                    ))}
+                </React.Fragment>
             ))}
             {tab === 'cloned' && voiceProfiles.map(vp => (
                 <SelectItem key={vp.id} value={vp.id}>{vp.name}</SelectItem>
@@ -165,7 +167,7 @@ const InspectorPanel: React.FC = () => {
 
     const handleVoiceChange = (val: string) => {
         if (!activeSegment) return;
-        const isPreset = PRESET_SPEAKERS.some(p => p.value === val);
+        const isPreset = isPresetSpeaker(val);
         if (val === 'default') {
             updateSegment(activeSegment.id, { voice_profile_id: undefined, speaker_preset: undefined });
         } else if (isPreset) {
@@ -379,7 +381,7 @@ const InspectorPanel: React.FC = () => {
                                 return 'default';
                             })()}
                             onValueChange={(val) => {
-                                const isPreset = PRESET_SPEAKERS.some(p => p.value === val);
+                                const isPreset = isPresetSpeaker(val);
                                 script.forEach(s => {
                                     if (val === 'default') {
                                         updateSegment(s.id, { voice_profile_id: undefined, speaker_preset: undefined });
@@ -472,18 +474,44 @@ const InspectorPanel: React.FC = () => {
             <div className="space-y-1.5">
                 <label className="text-sm font-medium text-moore-dark-gray">Voice</label>
                 <VoiceTabToggle tab={voiceTab} onChange={setVoiceTab} />
-                <Select
-                    value={voiceTab === 'preset'
-                        ? (activeSegment.speaker_preset || 'default')
-                        : (activeSegment.voice_profile_id || 'default')
-                    }
-                    onValueChange={handleVoiceChange}
-                >
-                    <SelectTrigger className="rounded-xl border-gray-200 focus:ring-moore-red/30">
-                        <SelectValue placeholder="Select a voice..." />
-                    </SelectTrigger>
-                    <VoiceSelectContent tab={voiceTab} voiceProfiles={voiceProfiles} />
-                </Select>
+                <div className="flex items-center gap-1.5">
+                    <div className="flex-1 min-w-0">
+                        <Select
+                            value={voiceTab === 'preset'
+                                ? (activeSegment.speaker_preset || 'default')
+                                : (activeSegment.voice_profile_id || 'default')
+                            }
+                            onValueChange={handleVoiceChange}
+                        >
+                            <SelectTrigger className="rounded-xl border-gray-200 focus:ring-moore-red/30">
+                                <SelectValue placeholder="Select a voice..." />
+                            </SelectTrigger>
+                            <VoiceSelectContent tab={voiceTab} voiceProfiles={voiceProfiles} />
+                        </Select>
+                    </div>
+                    {voiceTab === 'preset' && activeSegment.speaker_preset && (
+                        <VoicePreviewButton
+                            target={activeSegment.speaker_preset}
+                            kind="preset"
+                            caption={getPreset(activeSegment.speaker_preset)?.gloss}
+                        />
+                    )}
+                    {voiceTab === 'cloned' && activeSegment.voice_profile_id && (
+                        <VoicePreviewButton
+                            target={activeSegment.voice_profile_id}
+                            kind="clone"
+                            previewUrl={voiceProfiles.find(v => v.id === activeSegment.voice_profile_id)?.preview_url}
+                            caption="Welcome to Aria Appeal."
+                        />
+                    )}
+                </div>
+                {voiceTab === 'preset' && activeSegment.speaker_preset
+                    && getPreset(activeSegment.speaker_preset)?.language !== 'en' && (
+                    <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                        {getPreset(activeSegment.speaker_preset)?.languageLabel} narration — this voice
+                        is not native to English. Scripts and captions stay English.
+                    </p>
+                )}
             </div>
 
             <div className="space-y-1.5">

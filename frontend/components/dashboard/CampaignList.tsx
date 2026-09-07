@@ -12,7 +12,7 @@ interface Campaign {
     title: string;
     status: 'draft' | 'generated' | 'mastered';
     created_at: string | null;
-    target_audience: { audience?: string; emotion?: string };
+    target_audience: { audience?: string; emotion?: string; medium?: string };
     segments: { id: string; audio_url?: string; start_time_ms?: number; end_time_ms?: number }[];
 }
 
@@ -166,6 +166,11 @@ export const CampaignList: React.FC<CampaignListProps> = ({ refreshKey, onEmpty,
                                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${status.color}`}>
                                     {status.label}
                                 </span>
+                                {campaign.target_audience?.medium === 'video' && (
+                                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                                        Video
+                                    </span>
+                                )}
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-[11px] text-moore-mid-gray">
                                 {date && <span>{date}</span>}

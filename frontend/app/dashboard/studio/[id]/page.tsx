@@ -5,22 +5,31 @@ import { useParams } from 'next/navigation';
 import ScriptEditor from '@/components/studio/ScriptEditor';
 import WaveformVisualizer from '@/components/studio/WaveformVisualizer';
 import InspectorPanel from '@/components/studio/InspectorPanel';
+import StudioTabs from '@/components/studio/StudioTabs';
+import VideoSegmentList from '@/components/studio/VideoSegmentList';
+import VideoPreview from '@/components/studio/VideoPreview';
+import VideoInspector from '@/components/studio/VideoInspector';
+import { useVideoExport } from '@/hooks/useVideoExport';
 import { useStudioStore } from '@/store/studioStore';
 import { API_URL } from '@/lib/config';
 import { apiFetch } from '@/lib/api';
 import { useSession } from 'next-auth/react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { ArrowLeft, Download, Loader2, Keyboard } from 'lucide-react';
+import { ArrowLeft, Download, Film, Loader2, Keyboard } from 'lucide-react';
 
 export default function StudioPage() {
     const params = useParams();
     const projectId = params.id as string;
-    const { fetchProjectData, audioUrl, script, generatingSegments } = useStudioStore();
+    const { data: session, status } = useSession();
+    const { fetchProjectData, audioUrl, script, generatingSegments, medium, activeTab } = useStudioStore();
+    const videoExport = useVideoExport(projectId, session?.accessToken);
+    // An audio-only campaign can never show video columns, even if activeTab is
+    // left over from a video campaign viewed earlier in the same session.
+    const tab = medium === 'video' ? activeTab : 'audio';
     const [isGenerating, setIsGenerating] = useState(false);
     const [isLoadingProject, setIsLoadingProject] = useState(true);
     const [isAwaitingAudio, setIsAwaitingAudio] = useState(false);
-    const { data: session, status } = useSession();
     const [wasRegenerating, setWasRegenerating] = useState(false);
 
     useEffect(() => {
@@ -116,6 +125,47 @@ export default function StudioPage() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    // Video clips + brief + subtitle style, loaded once per project for video campaigns.
+    useEffect(() => {
+        let cancelled = false;
+        const load = async () => {
+            const token = session?.accessToken;
+            if (!token || !projectId || medium !== 'video') return;
+            try {
+                const res = await apiFetch(`/projects/${projectId}/video/clips`, { token });
+                if (!res.ok || cancelled) return;
+                const data = await res.json();
+                const store = useStudioStore.getState();
+                store.setVideoClips(data.clips ?? []);
+                store.setVideoBrief(data.video_brief ?? null);
+                store.setSubtitleStyle(data.subtitle_style ?? null);
+            } catch (e) {
+                console.error('Failed to load video clips:', e);
+            }
+        };
+        load();
+        if (medium === 'video') videoExport.refresh();
+        return () => { cancelled = true; };
+    }, [projectId, medium, session?.accessToken]);
+
+    // Assembly writes timeline positions onto the clips; re-read them so the clip
+    // strip shows real windows rather than the duration_ms fallback.
+    useEffect(() => {
+        if (videoExport.state.status !== 'ready') return;
+        const token = session?.accessToken;
+        if (!token || !projectId) return;
+        apiFetch(`/projects/${projectId}/video/clips`, { token })
+            .then(res => (res.ok ? res.json() : null))
+            .then(data => { if (data) useStudioStore.getState().setVideoClips(data.clips ?? []); })
+            .catch(() => { /* strip keeps its fallback positions */ });
+    }, [videoExport.state.status, projectId, session?.accessToken]);
+
+    // Belt and braces on top of each visualizer's own unmount teardown: the
+    // global isPlaying flag survives the swap, so clear it on every tab change.
+    useEffect(() => {
+        useStudioStore.getState().setIsPlaying(false);
+    }, [activeTab]);
+
     // Auto re-export after all segments finish regenerating
     const anyRegenerating = Object.values(generatingSegments).some(Boolean);
     useEffect(() => {
@@ -203,6 +253,8 @@ export default function StudioPage() {
                     <h1 className="font-semibold text-moore-black text-sm">
                         <span className="text-moore-red">M</span>OORE Studio
                     </h1>
+                    {medium === 'video' && <div className="h-5 w-px bg-gray-200" />}
+                    <StudioTabs />
                 </div>
                 <div className="flex gap-2">
                     <button
@@ -212,32 +264,48 @@ export default function StudioPage() {
                     >
                         <Keyboard className="h-4 w-4" />
                     </button>
-                    {audioUrl && (
+                    {tab === 'video' ? (
                         <button
-                            onClick={handleDownload}
-                            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
+                            onClick={videoExport.assemble}
+                            disabled={videoExport.state.status === 'running'}
+                            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium bg-moore-red text-white hover:bg-moore-red-dark shadow-sm transition-all disabled:opacity-50"
                         >
-                            <Download className="h-4 w-4" />
-                            Download WAV
+                            {videoExport.state.status === 'running' ? (
+                                <><Loader2 className="h-4 w-4 animate-spin" /> Assembling...</>
+                            ) : (
+                                <><Film className="h-4 w-4" /> {videoExport.state.url ? 'Re-assemble' : 'Assemble video'}</>
+                            )}
                         </button>
+                    ) : (
+                        <>
+                            {audioUrl && (
+                                <button
+                                    onClick={handleDownload}
+                                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-all"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    Download WAV
+                                </button>
+                            )}
+                            <button
+                                onClick={audioUrl ? handleDownload : handleGenerateFullAudio}
+                                disabled={isGenerating}
+                                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+                                    audioUrl
+                                        ? 'bg-white text-moore-mid-gray border border-gray-200 hover:bg-gray-50'
+                                        : 'bg-moore-red text-white hover:bg-moore-red-dark shadow-sm'
+                                } disabled:opacity-50`}
+                            >
+                                {isGenerating ? (
+                                    <><Loader2 className="h-4 w-4 animate-spin" /> Exporting...</>
+                                ) : audioUrl ? (
+                                    'Re-export'
+                                ) : (
+                                    <><Download className="h-4 w-4" /> Export & Download</>
+                                )}
+                            </button>
+                        </>
                     )}
-                    <button
-                        onClick={audioUrl ? handleDownload : handleGenerateFullAudio}
-                        disabled={isGenerating}
-                        className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
-                            audioUrl
-                                ? 'bg-white text-moore-mid-gray border border-gray-200 hover:bg-gray-50'
-                                : 'bg-moore-red text-white hover:bg-moore-red-dark shadow-sm'
-                        } disabled:opacity-50`}
-                    >
-                        {isGenerating ? (
-                            <><Loader2 className="h-4 w-4 animate-spin" /> Exporting...</>
-                        ) : audioUrl ? (
-                            'Re-export'
-                        ) : (
-                            <><Download className="h-4 w-4" /> Export & Download</>
-                        )}
-                    </button>
                 </div>
             </div>
 
@@ -259,21 +327,27 @@ export default function StudioPage() {
                     </div>
                 )}
                 <div className="flex flex-1 overflow-hidden">
-                    {/* Left Column: Script - 30% */}
+                    {/* Left Column - 30% */}
                     <div className="w-[30%] h-full flex flex-col border-r border-gray-200">
-                        <ScriptEditor />
+                        {tab === 'video' ? <VideoSegmentList /> : <ScriptEditor />}
                     </div>
 
-                    {/* Center Column: Waveform - 45% */}
+                    {/* Center Column - 45%. The two players are mutually exclusive on
+                        purpose: switching tabs unmounts the other one, which is what
+                        makes its teardown effect stop playback. Do not hide with CSS. */}
                     <div className="w-[45%] h-full flex flex-col relative bg-white">
-                        <div className="flex-1 p-6 flex items-center justify-center">
-                            <WaveformVisualizer />
-                        </div>
+                        {tab === 'video' ? (
+                            <VideoPreview exportState={videoExport.state} onAssemble={videoExport.assemble} />
+                        ) : (
+                            <div className="flex-1 p-6 flex items-center justify-center">
+                                <WaveformVisualizer />
+                            </div>
+                        )}
                     </div>
 
-                    {/* Right Column: Inspector - 25% */}
+                    {/* Right Column - 25% */}
                     <div className="w-[25%] h-full border-l border-gray-200 bg-white">
-                        <InspectorPanel />
+                        {tab === 'video' ? <VideoInspector /> : <InspectorPanel />}
                     </div>
                 </div>
                 </>

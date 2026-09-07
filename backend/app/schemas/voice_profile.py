@@ -26,12 +26,10 @@ class VoiceProfileResponse(VoiceProfileBase):
 
     @classmethod
     def from_orm_with_clone_status(cls, profile):
-        preview_url = None
-        if profile.reference_audio_path:
-            # Serve the reference audio as a preview via the static mount
-            import os
-            filename = os.path.basename(profile.reference_audio_path)
-            preview_url = f"/static/voice_uploads/{filename}"
+        # Point at the synthesized greeting cache, NOT the user's raw uploaded
+        # reference clip — previewing that played back their whole recording.
+        # None until the preview exists; POST /{id}/preview creates it.
+        from app.services import voice_preview
 
         return cls(
             id=profile.id,
@@ -39,7 +37,7 @@ class VoiceProfileResponse(VoiceProfileBase):
             name=profile.name,
             base_model=profile.base_model,
             has_cloned_voice=profile.reference_audio_path is not None,
-            preview_url=preview_url,
+            preview_url=voice_preview.clone_preview_url(profile.id),
         )
 
 class VoiceValidationResponse(BaseModel):
@@ -47,3 +45,19 @@ class VoiceValidationResponse(BaseModel):
     lufs: float
     speech_ratio: float
     errors: List[str]
+
+
+class VoicePresetResponse(BaseModel):
+    speaker: str
+    label: str
+    language: str
+    language_label: str
+    gender: str
+    accent: Optional[str] = None
+    greeting: str
+    gloss: str
+    preview_url: Optional[str] = None
+
+
+class VoicePreviewResponse(BaseModel):
+    preview_url: str

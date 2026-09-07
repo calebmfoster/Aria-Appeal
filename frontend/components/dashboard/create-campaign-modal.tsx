@@ -27,13 +27,8 @@ const STEPS = [
     "Opening studio..."
 ]
 
-// Mirrors the studio's preset speakers (InspectorPanel). Only Aiden and Ryan are
-// native-English Qwen3-TTS presets; the rest sound off reading English. A campaign
-// generates all segments in one voice; cohesion comes from the chained generation.
-const PRESET_SPEAKERS = [
-    { value: 'Aiden', label: 'Aiden — Male (English)' },
-    { value: 'Ryan',  label: 'Ryan — Male (English)' },
-]
+import { PRESET_GROUPS, isPresetSpeaker, getPreset } from '@/lib/voicePresets'
+import VoicePreviewButton from '@/components/ui/VoicePreviewButton'
 
 export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProps) {
     const { data: session } = useSession();
@@ -43,6 +38,7 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
     const [showAdvanced, setShowAdvanced] = React.useState(false)
     const [voiceProfiles, setVoiceProfiles] = React.useState<VoiceProfile[]>([])
     const [selectedVoice, setSelectedVoice] = React.useState('default')
+    const [medium, setMedium] = React.useState<'audio' | 'video'>('audio')
     const [formData, setFormData] = React.useState({
         target_audience: "",
         cause: "",
@@ -95,12 +91,14 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
 
             // Voice applies to every segment. 'default' → leave unset (backend defaults to Aiden).
             if (selectedVoice && selectedVoice !== 'default') {
-                if (PRESET_SPEAKERS.some(p => p.value === selectedVoice)) {
+                if (isPresetSpeaker(selectedVoice)) {
                     payload.speaker_preset = selectedVoice;
                 } else {
                     payload.voice_profile_id = selectedVoice;
                 }
             }
+
+            payload.medium = medium;
 
             const res = await apiFetch('/projects', {
                 method: 'POST',
@@ -214,30 +212,82 @@ export function CreateCampaignModal({ isOpen, onClose }: CreateCampaignModalProp
                     />
                 </div>
 
+                {/* Medium — video campaigns get an Audio | Video tab in the studio.
+                    Audio-only campaigns render exactly as they do today. */}
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-moore-dark-gray">Deliverable</label>
+                    <div className="flex gap-0.5 p-0.5 bg-gray-100 rounded-lg">
+                        {(['audio', 'video'] as const).map(value => (
+                            <button
+                                key={value}
+                                type="button"
+                                onClick={() => setMedium(value)}
+                                className={`flex-1 text-[11px] py-1.5 rounded-md font-medium transition-all ${
+                                    medium === value
+                                        ? 'bg-white text-moore-black shadow-sm'
+                                        : 'text-moore-mid-gray hover:text-moore-dark-gray'
+                                }`}
+                            >
+                                {value === 'audio' ? 'Audio only' : 'Audio + video'}
+                            </button>
+                        ))}
+                    </div>
+                    <p className="text-[11px] text-moore-mid-gray">
+                        Video campaigns gain a Video tab in the studio for previsualisation.
+                    </p>
+                </div>
+
                 {/* Voice — applied to every segment; cohesion comes from chained generation */}
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium text-moore-dark-gray">Voice</label>
-                    <Select value={selectedVoice} onValueChange={setSelectedVoice}>
-                        <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-moore-red/30">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="default">Default / Auto (Aiden)</SelectItem>
-                            {PRESET_SPEAKERS.map(p => (
-                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                            ))}
-                            {voiceProfiles.length > 0 && (
-                                <div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-moore-mid-gray">
-                                    Cloned voices
-                                </div>
-                            )}
-                            {voiceProfiles.map(vp => (
-                                <SelectItem key={vp.id} value={vp.id}>{vp.name} (cloned)</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-1.5">
+                        <div className="flex-1 min-w-0">
+                            <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+                                <SelectTrigger className="rounded-xl border-gray-200 focus:ring-2 focus:ring-moore-red/30">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="default">Default / Auto (Aiden)</SelectItem>
+                                    {PRESET_GROUPS.map(group => (
+                                        <React.Fragment key={group.language}>
+                                            <div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-moore-mid-gray">
+                                                {group.label}
+                                            </div>
+                                            {group.presets.map(p => (
+                                                <SelectItem key={p.speaker} value={p.speaker}>{p.label}</SelectItem>
+                                            ))}
+                                        </React.Fragment>
+                                    ))}
+                                    {voiceProfiles.length > 0 && (
+                                        <div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-moore-mid-gray">
+                                            Cloned voices
+                                        </div>
+                                    )}
+                                    {voiceProfiles.map(vp => (
+                                        <SelectItem key={vp.id} value={vp.id}>{vp.name} (cloned)</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {isPresetSpeaker(selectedVoice) && (
+                            <VoicePreviewButton
+                                target={selectedVoice}
+                                kind="preset"
+                                caption={getPreset(selectedVoice)?.gloss}
+                            />
+                        )}
+                        {selectedVoice !== 'default' && !isPresetSpeaker(selectedVoice) && (
+                            <VoicePreviewButton
+                                target={selectedVoice}
+                                kind="clone"
+                                previewUrl={voiceProfiles.find(v => v.id === selectedVoice)?.preview_url}
+                                caption="Welcome to Aria Appeal."
+                            />
+                        )}
+                    </div>
                     <p className="text-[11px] text-moore-mid-gray">
-                        Applied to every segment. Cloned voices carry tone across segments best.
+                        Applied to every segment. Narration covers English, Chinese, Japanese and
+                        Korean; scripts and captions are English only.
                     </p>
                 </div>
 

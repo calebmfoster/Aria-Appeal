@@ -54,7 +54,10 @@ npm run lint                          # ESLint
 - Backend `.env` must have `DATABASE_URL` (asyncpg connection string to Supabase)
 - Frontend `.env.local` should set `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`
 - Docker is NOT installed on this system — use local dev commands
-- `ffmpeg`/`ffprobe` are NOT available — audio processing uses `soundfile` for WAV
+- `ffmpeg`/`ffprobe` ARE installed (8.1.2, via winget Gyan.FFmpeg) and on PATH — added for the
+  video previs work. Audio processing still uses `soundfile` for WAV; ffmpeg is for video only.
+  `app/services/video/ffmpeg_utils.py` also honours `FFMPEG_BINARY`/`FFPROBE_BINARY` env overrides
+- Video generation needs `gemini_api_key` in `config.json` (set via the launcher Settings panel)
 
 ## Code Conventions
 
